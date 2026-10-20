@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700&family=Instrument+Sans:wght@400;600&family=JetBrains+Mono:wght@400;600&display=swap">
 <style>
-/* Layout: an instrument console. Title and tab rail across the top, one full-bleed viewport canvas, a narrow readout column on the right (stacks below on phones). */
+/* Layout: an instrument console. One full-bleed 3D viewport, a readout column on the right with the dimension dial on top (stacks below on phones). */
 :root {
   --void: #07080f;
   --panel: #0e1120;
@@ -21,6 +21,7 @@
   --cyan: #5fd6e8;
   --violet: #a98bff;
   --rose: #ff6f91;
+  --green: #7ee081;
   --display: 'Unbounded', 'Arial Black', system-ui, sans-serif;
   --body: 'Instrument Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
   --mono: 'JetBrains Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
@@ -28,12 +29,7 @@
 }
 [hidden] { display: none !important; }
 html, body { height: 100%; }
-body {
-  margin: 0;
-  background: var(--void);
-  color: var(--ink);
-  font: 15px/1.5 var(--body);
-}
+body { margin: 0; background: var(--void); color: var(--ink); font: 15px/1.5 var(--body); }
 .app {
   height: 100%;
   box-sizing: border-box;
@@ -44,299 +40,147 @@ body {
   padding-left: max(16px, env(safe-area-inset-left, 0px));
   padding-right: max(16px, env(safe-area-inset-right, 0px));
 }
-.top { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 10px 24px; }
-.brand h1 {
-  margin: 0;
-  font: 700 clamp(20px, 3vw, 28px)/1.1 var(--display);
-  letter-spacing: -0.01em;
-}
+.brand h1 { margin: 0; font: 700 clamp(20px, 3vw, 28px)/1.1 var(--display); letter-spacing: -0.01em; }
 .brand h1 span { color: var(--amber); }
 .brand p { margin: 2px 0 0; color: var(--muted); font-size: 13px; }
-.tabs { display: flex; flex-wrap: wrap; gap: 6px; }
-.tabs button {
-  font: 600 13px/1 var(--body);
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--muted);
-  background: transparent;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  padding: 9px 14px;
-  cursor: pointer;
-}
-.tabs button[aria-selected="true"] { color: var(--void); background: var(--amber); border-color: var(--amber); }
-.tabs button:focus-visible, button:focus-visible, select:focus-visible, input:focus-visible, a:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
-main { flex: 1; min-height: 0; }
-.view { height: 100%; display: grid; grid-template-columns: minmax(0, 1fr) 330px; gap: 12px; }
+main { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 350px; gap: 12px; }
 .stage {
-  position: relative;
-  min-height: 0;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  overflow: hidden;
+  position: relative; min-height: 0;
+  border: 1px solid var(--line); border-radius: 10px; overflow: hidden;
   background: radial-gradient(120% 90% at 50% 40%, var(--raise), var(--void));
+  touch-action: none; cursor: grab;
 }
-#wc:focus { outline: none; }
-.stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
-.overlay {
-  position: absolute; left: 12px; top: 10px; right: 12px;
-  pointer-events: none;
-  font: 12px/1.5 var(--mono);
-  color: var(--muted);
-}
+.stage:active { cursor: grabbing; }
+.stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.overlay { position: absolute; left: 12px; top: 10px; right: 12px; pointer-events: none; font: 12px/1.5 var(--mono); color: var(--muted); }
 .overlay b { color: var(--ink); font-weight: 600; }
+.hint { position: absolute; right: 12px; bottom: 10px; pointer-events: none; font: 11px var(--mono); color: var(--muted); }
+.legend { position: absolute; left: 12px; bottom: 10px; pointer-events: none; font: 11px var(--mono); color: var(--muted); display: flex; align-items: center; gap: 6px; }
+.legend i { display: block; width: 90px; height: 6px; border-radius: 3px; background: linear-gradient(90deg, var(--cyan), var(--violet), var(--amber)); }
 .panel { min-width: 0; overflow: auto; display: flex; flex-direction: column; gap: 12px; padding-right: 2px; }
 .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; }
-.card h2 {
-  margin: 0;
-  font: 600 11px/1 var(--body);
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
-.card p { margin: 0; color: var(--ink); font-size: 14px; }
+.card h2 { margin: 0; font: 600 11px/1 var(--body); letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); display: flex; justify-content: space-between; gap: 8px; }
+.card h2 span { color: var(--ink); letter-spacing: 0.04em; }
+.card h3 { margin: 4px 0 0; font: 600 12px var(--body); color: var(--muted); }
+.card p { margin: 0; font-size: 14px; }
 .card p.dim { color: var(--muted); font-size: 13px; }
-label.row { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 4px 10px; font-size: 13px; color: var(--muted); }
-label.row input[type=range] { grid-column: 1 / -1; width: 100%; accent-color: var(--amber); }
-label.row output { font: 600 13px var(--mono); color: var(--ink); font-variant-numeric: tabular-nums; }
-select {
-  width: 100%;
-  font: 14px var(--body);
-  color: var(--ink);
-  background: var(--raise);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 8px 10px;
+.dial { display: flex; align-items: baseline; gap: 10px; }
+.dial input[type=number] {
+  width: 100%; min-width: 0;
+  font: 700 40px/1.1 var(--display); font-variant-numeric: tabular-nums;
+  color: var(--amber); background: transparent; border: 0; border-bottom: 1px dashed var(--line); padding: 0;
 }
+.dial input[type=number]::-webkit-inner-spin-button { opacity: 0.4; }
+.dial span { font: 13px var(--body); color: var(--muted); white-space: nowrap; }
+input[type=range] { width: 100%; accent-color: var(--amber); margin: 0; }
+#D { height: 28px; }
+.scale { display: grid; grid-template-columns: repeat(7, 1fr); font: 11px var(--mono); color: var(--muted); margin-top: -6px; }
+.scale span:nth-child(n+2) { text-align: center; }
+.scale span:last-child { text-align: right; }
+label.row { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 4px 10px; font-size: 13px; color: var(--muted); }
+label.row input { grid-column: 1 / -1; }
+label.row output { font: 600 13px var(--mono); color: var(--ink); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chips button {
+  font: 12px var(--body); color: var(--ink);
+  background: var(--raise); border: 1px solid var(--line); border-radius: 999px;
+  padding: 5px 10px; cursor: pointer;
+}
+.chips button b { font: 600 11px var(--mono); color: var(--amber); margin-left: 4px; }
+.chips button:hover { border-color: var(--muted); }
+.ctl { display: grid; grid-template-columns: 52px minmax(0, 1fr) 52px; align-items: center; gap: 8px; font: 12px var(--mono); }
+.ctl .tag { display: flex; gap: 3px; align-items: center; color: var(--muted); }
+.ctl .tag b { display: inline-grid; place-items: center; width: 18px; height: 18px; border-radius: 4px; color: var(--void); font-weight: 600; }
+.ctl output { text-align: right; color: var(--ink); font-variant-numeric: tabular-nums; }
+.ctls { display: flex; flex-direction: column; gap: 6px; }
+.rowbtns { display: flex; justify-content: flex-end; }
 .check { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); cursor: pointer; }
 .check input { accent-color: var(--amber); }
-.btn {
-  font: 600 13px var(--body);
-  color: var(--ink);
-  background: var(--raise);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 8px 12px;
-  cursor: pointer;
-}
+.btn { font: 600 13px var(--body); color: var(--ink); background: var(--raise); border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px; cursor: pointer; }
 .btn:hover { border-color: var(--muted); }
-.btn.primary { background: var(--amber); color: var(--void); border-color: var(--amber); }
-.big { font: 700 30px/1 var(--display); font-variant-numeric: tabular-nums; }
-.big small { font: 500 13px var(--body); color: var(--muted); margin-left: 6px; }
-.formula { font: 13px/1.6 var(--mono); color: var(--ink); overflow-wrap: anywhere; }
+button:focus-visible, input:focus-visible, a:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+.formula { font: 13px/1.7 var(--mono); overflow-wrap: anywhere; }
 .formula em { font-style: normal; color: var(--amber); }
+.formula .step { color: var(--muted); }
+.big { font: 700 26px/1 var(--display); font-variant-numeric: tabular-nums; }
+.big small { font: 500 13px var(--body); color: var(--muted); margin-left: 6px; }
 .chart { position: relative; width: 100%; aspect-ratio: 16 / 10; max-width: 100%; }
 .chart canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
-dl.stats { margin: 0; display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; font-size: 13px; }
-dl.stats dt { color: var(--muted); }
-dl.stats dd { margin: 0; font: 600 13px var(--mono); text-align: right; font-variant-numeric: tabular-nums; }
-.dims { display: flex; gap: 6px; flex-wrap: wrap; }
-.dims button {
-  font: 700 16px var(--display);
-  width: 44px; height: 44px;
-  border-radius: 8px;
-  border: 1px solid var(--line);
-  background: var(--raise);
-  color: var(--ink);
-  cursor: pointer;
-}
-.dims button[aria-pressed="true"] { background: var(--amber); color: var(--void); border-color: var(--amber); }
-.coords { display: flex; flex-direction: column; gap: 6px; }
-.coord { display: grid; grid-template-columns: 22px 54px 1fr; align-items: center; gap: 8px; font: 13px var(--mono); }
-.coord .chip { width: 22px; height: 22px; border-radius: 6px; display: grid; place-items: center; font-weight: 600; color: var(--void); }
-.coord .bar { height: 6px; border-radius: 3px; background: var(--raise); position: relative; }
-.coord .bar i { position: absolute; top: -3px; width: 4px; height: 12px; border-radius: 2px; margin-left: -2px; }
-.coord .key { color: var(--muted); font-size: 12px; }
-.keys { font: 12px/1.7 var(--mono); color: var(--muted); }
-.keys kbd { font: 600 11px var(--mono); color: var(--ink); background: var(--raise); border: 1px solid var(--line); border-radius: 4px; padding: 1px 5px; }
-.toast {
-  position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%);
-  max-width: min(88%, 520px);
-  background: color-mix(in srgb, var(--panel) 88%, transparent);
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  padding: 10px 14px;
-  font-size: 14px;
-  text-align: center;
-  pointer-events: none;
-  transition: opacity .4s;
-}
-.side { position: relative; width: 100%; aspect-ratio: 16 / 10; max-width: 100%; border-radius: 8px; overflow: hidden; background: var(--void); border: 1px solid var(--line); }
-.side canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
-.pad { position: absolute; right: 10px; bottom: 10px; display: none; gap: 8px; align-items: flex-end; }
-.pad .grid { display: grid; grid-template-columns: repeat(3, 44px); grid-template-rows: repeat(3, 44px); gap: 4px; }
-.pad .extra { display: flex; flex-direction: column; gap: 4px; }
-.pad button {
-  width: 44px; height: 44px; border-radius: 10px;
-  background: color-mix(in srgb, var(--raise) 85%, transparent);
-  border: 1px solid var(--line); color: var(--ink);
-  font: 600 13px var(--mono);
-  touch-action: none; user-select: none; -webkit-user-select: none;
-}
-.win {
-  position: absolute; inset: 0;
-  display: grid; place-items: center;
-  background: color-mix(in srgb, var(--void) 70%, transparent);
-}
-.win div { text-align: center; display: flex; flex-direction: column; gap: 12px; align-items: center; padding: 20px; }
-.win h3 { margin: 0; font: 700 26px/1.2 var(--display); text-wrap: balance; }
-.win p { margin: 0; color: var(--muted); max-width: 40ch; }
 a { color: var(--cyan); }
-@media (pointer: coarse) { .pad { display: flex; } }
+.fail { position: absolute; inset: 0; display: grid; place-items: center; padding: 24px; text-align: center; color: var(--muted); }
 @media (max-width: 860px) {
   .app { height: auto; min-height: 100%; }
-  .view { height: auto; grid-template-columns: minmax(0, 1fr); }
-  .stage { height: 62vh; min-height: 340px; }
+  main { grid-template-columns: minmax(0, 1fr); }
+  .stage { height: 58vh; min-height: 320px; }
   .panel { overflow: visible; }
 }
-@media (prefers-reduced-motion: reduce) { .toast { transition: none; } }
 </style>
 </head>
 <body>
 <div class="app">
-  <header class="top">
-    <div class="brand">
-      <h1>Dimension<span>arium</span></h1>
-      <p>Measure fractional dimensions, spin shapes from 0D to 10D, then go walk around in one.</p>
-    </div>
-    <nav class="tabs" role="tablist" aria-label="Sections">
-      <button role="tab" id="tab-btn-fractal" data-tab="fractal" aria-selected="true">Fractal lab</button>
-      <button role="tab" id="tab-btn-hyper" data-tab="hyper" aria-selected="false">Hypershapes</button>
-      <button role="tab" id="tab-btn-world" data-tab="world" aria-selected="false">Explore</button>
-    </nav>
+  <header class="brand">
+    <h1>Dimension<span>arium</span></h1>
+    <p>Pick any Hausdorff dimension from 0 to 6. The shape is computed to have exactly that dimension.</p>
   </header>
-
   <main>
-    <!-- ============ FRACTAL LAB ============ -->
-    <section class="view" id="view-fractal" role="tabpanel" aria-labelledby="tab-btn-fractal">
-      <div class="stage">
-        <canvas id="fc" aria-label="Fractal drawing"></canvas>
-        <div class="overlay" id="fOverlay"></div>
+    <div class="stage" id="stage">
+      <div class="overlay" id="overlay"></div>
+      <div class="legend" id="legend" hidden><span>−w</span><i></i><span>+w</span></div>
+      <div class="hint">drag to orbit the camera · scroll to zoom</div>
+    </div>
+    <aside class="panel">
+      <div class="card">
+        <h2>Hausdorff dimension</h2>
+        <div class="dial">
+          <input type="number" id="Dnum" min="0" max="5.999" step="0.001" value="1.5" aria-label="Dimension, typed">
+          <span id="Dword">curve</span>
+        </div>
+        <input type="range" id="D" min="0" max="5.99" step="0.001" value="1.5" aria-label="Dimension">
+        <div class="scale"><span>0</span><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span></div>
+        <div class="chips" id="chips"></div>
+        <label class="row">Iterations <output id="depthOut">6</output>
+          <input type="range" id="depth" min="0" max="8" step="1" value="6">
+        </label>
       </div>
-      <aside class="panel">
-        <div class="card">
-          <h2>Shape</h2>
-          <select id="fType" aria-label="Fractal"></select>
-          <label class="row" id="fDRow">Target dimension <output id="fDOut"></output>
-            <input type="range" id="fD" min="0" max="2" step="0.01">
-          </label>
-          <label class="row">Iterations <output id="fDepthOut"></output>
-            <input type="range" id="fDepth" min="0" max="9" step="1" value="5">
-          </label>
-          <label class="check"><input type="checkbox" id="fColor" checked> Color the N first-level copies</label>
-          <button class="btn" id="fReroll">New random coastline</button>
-          <p class="dim" id="fText"></p>
-        </div>
-        <div class="card">
-          <h2>Self-similar dimension</h2>
-          <div class="big" id="fTheory"></div>
-          <div class="formula" id="fFormula"></div>
-        </div>
-        <div class="card">
-          <h2>Box-counting estimate</h2>
-          <div class="big" id="fMeasured"></div>
-          <div class="chart"><canvas id="fChart" aria-label="Log-log plot of boxes touched against grid resolution"></canvas></div>
-          <p class="dim">Cover the shape with grids of shrinking box size ε and count the boxes it touches. Plotted on log scales the counts fall on a line, and its slope is the dimension. This works for rough shapes that have no exact copies of themselves, which is most fractals in nature.</p>
-          <p class="dim"><a href="https://www.youtube.com/watch?v=gB9n2gHsHN4" target="_blank" rel="noopener">Watch the video on fractal dimension</a></p>
-        </div>
-      </aside>
-    </section>
 
-    <!-- ============ HYPERSHAPES ============ -->
-    <section class="view" id="view-hyper" role="tabpanel" aria-labelledby="tab-btn-hyper" hidden>
-      <div class="stage">
-        <canvas id="hc" aria-label="Rotating higher-dimensional shape"></canvas>
-        <div class="overlay" id="hOverlay"></div>
+      <div class="card" id="moveCard">
+        <h2>Move it <span id="moveN"></span></h2>
+        <p class="dim" id="moveNote"></p>
+        <h3 id="tHead">Translate</h3>
+        <div class="ctls" id="trans"></div>
+        <h3 id="rHead">Rotate</h3>
+        <div class="ctls" id="rots"></div>
+        <div class="rowbtns">
+          <button class="btn" id="reset">Reset</button>
+        </div>
       </div>
-      <aside class="panel">
-        <div class="card">
-          <h2>Generate</h2>
-          <label class="row">Dimensions <output id="hNOut"></output>
-            <input type="range" id="hN" min="0" max="10" step="1" value="4">
-          </label>
-          <select id="hShape" aria-label="Shape family">
-            <option value="cube">Hypercube</option>
-            <option value="simplex">Simplex</option>
-            <option value="orthoplex">Cross-polytope</option>
-            <option value="sphere">Hypersphere</option>
-            <option value="sierp">Sierpinski simplex (fractal)</option>
-            <option value="cantor">Cantor dust (fractal)</option>
-          </select>
-        </div>
-        <div class="card">
-          <h2>Rotate</h2>
-          <select id="hPlane" aria-label="Rotation plane"></select>
-          <label class="row">Speed <output id="hSpeedOut"></output>
-            <input type="range" id="hSpeed" min="0" max="3" step="0.05" value="1">
-          </label>
-          <label class="check"><input type="checkbox" id="hPersp" checked> Perspective projection</label>
-          <p class="dim">Drag the shape to orbit the 3D view. Each extra axis is flattened by a perspective step, the way a camera flattens 3D onto film. Color shows the 4th coordinate: cyan is −w, rose is +w.</p>
-        </div>
-        <div class="card">
-          <h2 id="hName">Tesseract</h2>
-          <dl class="stats" id="hStats"></dl>
-          <p class="dim" id="hNote"></p>
-        </div>
-      </aside>
-    </section>
 
-    <!-- ============ WORLD ============ -->
-    <section class="view" id="view-world" role="tabpanel" aria-labelledby="tab-btn-world" hidden>
-      <div class="stage" id="wStage">
-        <canvas id="wc" tabindex="0" aria-label="World view. Use the keyboard to move."></canvas>
-        <div class="overlay" id="wOverlay"></div>
-        <div class="toast" id="wToast"></div>
-        <div class="pad" id="wPad">
-          <div class="extra" id="wPadExtra"></div>
-          <div class="grid">
-            <span></span><button data-k="up" aria-label="Move up">▲</button><span></span>
-            <button data-k="left" aria-label="Move left">◀</button><span></span><button data-k="right" aria-label="Move right">▶</button>
-            <span></span><button data-k="down" aria-label="Move down">▼</button><span></span>
-          </div>
-        </div>
-        <div class="win" id="wWin" hidden>
-          <div>
-            <h3 id="wWinTitle">You escaped</h3>
-            <p id="wWinText"></p>
-            <button class="btn primary" id="wAgain">Next world</button>
-          </div>
-        </div>
+      <div class="card">
+        <h2>How the shape is computed</h2>
+        <p id="how"></p>
+        <div class="formula" id="formula"></div>
       </div>
-      <aside class="panel">
-        <div class="card">
-          <h2>World dimensions</h2>
-          <div class="dims" id="wDims"></div>
-          <p class="dim" id="wDimText"></p>
-        </div>
-        <div class="card">
-          <h2>Your position</h2>
-          <div class="coords" id="wCoords"></div>
-          <dl class="stats"><dt>Crystals</dt><dd id="wGems">0 / 0</dd></dl>
-        </div>
-        <div class="card" id="wSideCard">
-          <h2>Side view</h2>
-          <select id="wSideAxis" aria-label="Hidden axis for the side view"></select>
-          <div class="side"><canvas id="ws" aria-label="Side view through a hidden dimension"></canvas></div>
-          <p class="dim">This slice runs along x and one hidden axis. The dashed line is the slice you are standing in, which is all the main view can show you.</p>
-        </div>
-        <div class="card">
-          <h2>Controls</h2>
-          <div class="keys" id="wKeys"></div>
-          <label class="check"><input type="checkbox" id="wGhost" checked> Hyper-sense: outline things that are nearby in hidden dimensions</label>
-          <button class="btn" id="wNew">New world</button>
-        </div>
-      </aside>
-    </section>
+      <div class="card" id="boxCard">
+        <h2>Check by box counting</h2>
+        <div class="big" id="measured"></div>
+        <div class="chart"><canvas id="chart" aria-label="Log-log plot of boxes touched against box size"></canvas></div>
+        <p class="dim">The program scatters points over the shape, covers it with grids of boxes of side ε = 1/2, 1/4, 1/8 and so on, and counts the boxes touched. If N(ε) ∝ ε<sup>−D</sup>, those counts fall on a line of slope D. Only grids coarse enough for the points to fill are used (cyan). For the swept shapes the chart measures the profile curve, then adds the sphere's dimension, which is exact because the sphere is smooth.</p>
+        <p class="dim"><a href="https://www.youtube.com/watch?v=gB9n2gHsHN4" target="_blank" rel="noopener">Watch the video on fractal dimension</a></p>
+      </div>
+    </aside>
   </main>
 </div>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
 (() => {
 'use strict';
 const $ = s => document.querySelector(s);
-const AX = ['x', 'y', 'z', 'w', 'v', 'u', 't', 's', 'r', 'q'];
-const AXC = ['#ffb84d', '#5fd6e8', '#a98bff', '#ff6f91', '#7ee081', '#f4e36b', '#ff9a5c', '#6ba8ff', '#e07bff', '#9be7c4'];
 const TAU = Math.PI * 2;
+const AX = ['x', 'y', 'z', 'w', 'v', 'u'];
+const AXC = ['#ffb84d', '#5fd6e8', '#a98bff', '#ff6f91', '#7ee081', '#f4e36b'];
+const stage = $('#stage');
+if (!window.THREE) { stage.insertAdjacentHTML('beforeend', '<div class="fail">The 3D library did not load. Check your connection and reload the page.</div>'); return; }
 
 function mulberry32(a) {
   return () => {
@@ -346,1007 +190,547 @@ function mulberry32(a) {
     return ((t ^ t >>> 14) >>> 0) / 4294967296;
   };
 }
-function gauss(r) { return Math.sqrt(-2 * Math.log(r() || 1e-9)) * Math.cos(TAU * r()); }
-
-// Size a canvas to its box at device resolution; drawing happens in CSS pixels.
-function prep(c) {
-  const r = c.getBoundingClientRect();
-  const d = Math.min(window.devicePixelRatio || 1, 2);
-  const w = Math.max(1, Math.round(r.width * d)), h = Math.max(1, Math.round(r.height * d));
-  if (c.width !== w || c.height !== h) { c.width = w; c.height = h; }
-  const ctx = c.getContext('2d');
-  ctx.setTransform(d, 0, 0, d, 0, 0);
-  c._w = r.width; c._h = r.height;
-  return ctx;
+function gauss(r) { return Math.sqrt(-2 * Math.log(r() || 1e-12)) * Math.cos(TAU * r()); }
+function sphereDir(m, rand) { // uniform direction on the sphere S^(m-1) in R^m
+  const u = new Array(m); let s = 0;
+  for (let i = 0; i < m; i++) { u[i] = gauss(rand); s += u[i] * u[i]; }
+  s = Math.sqrt(s) || 1; for (let i = 0; i < m; i++) u[i] /= s;
+  return u;
 }
 
-/* ================================================================
-   FRACTAL LAB
-   Every fractal is an iterated function system: a list of affine maps
-   [a, b, c, d, e, f] meaning x' = a x + b y + e, y' = c x + d y + f.
-   ================================================================ */
-const sim = (s, ang, tx, ty) => [s * Math.cos(ang), -s * Math.sin(ang), s * Math.sin(ang), s * Math.cos(ang), tx, ty];
-const comp = (A, B) => [
-  A[0] * B[0] + A[1] * B[2], A[0] * B[1] + A[1] * B[3],
-  A[2] * B[0] + A[3] * B[2], A[2] * B[1] + A[3] * B[3],
-  A[0] * B[4] + A[1] * B[5] + A[4], A[2] * B[4] + A[3] * B[5] + A[5]
-];
+/* ---------------------------------------------------------------
+   The math. Each fractal is self-similar: N copies of itself, each
+   scaled by r. When the copies don't overlap (the open set condition)
+   Moran's theorem gives the Hausdorff dimension exactly:
+       N · r^D = 1   ⟺   D = log N / log(1/r)
+   So to hit a target D we pick N and solve for r.
 
-function koch(t) {
-  const r = 1 / (2 + 2 * Math.cos(t));
-  return {
-    maps: [sim(r, 0, 0, 0), sim(r, t, r, 0), sim(r, -t, r + r * Math.cos(t), r * Math.sin(t)), sim(r, 0, 1 - r, 0)],
-    N: 4, s: 1 / r, angle: t
-  };
+   0 < D < 1   Cantor set in 1D: 2 copies.
+   1 < D < 2   Koch-type curve in 2D: 4 copies, bump angle solved.
+   n−1 < D < n (n = 3 … 6)   a Koch-type curve of dimension D − (n − 2),
+               swept around the y axis through every direction of the
+               remaining n − 1 axes (a circle in 3D, a 2-sphere in 4D,
+               a 3-sphere in 5D, a 4-sphere in 6D). Sweeping along a smooth m-sphere adds
+               exactly m to the Hausdorff dimension.
+   D = m       a solid m-cube: 2^m copies at scale 1/2.
+   --------------------------------------------------------------- */
+const cantorR = D => Math.pow(2, -1 / D);
+function kochParams(D) {
+  const r = Math.pow(4, -1 / D);
+  // the 4 pieces must still span the unit base: 2r + 2r·cosθ = 1
+  const theta = Math.acos(Math.max(-1, Math.min(1, (1 / r - 2) / 2)));
+  return { r, theta };
 }
-function grid3(keep) {
-  const maps = [];
-  for (let j = 0; j < 3; j++) for (let i = 0; i < 3; i++) if (keep(i, j)) maps.push(sim(1 / 3, 0, i / 3, j / 3));
-  return maps;
+function kochMaps({ r, theta: t }) {
+  return [
+    [r, 0, 0, 0],
+    [r * Math.cos(t), r * Math.sin(t), r, 0],
+    [r * Math.cos(-t), r * Math.sin(-t), r + r * Math.cos(t), r * Math.sin(t)],
+    [r, 0, 1 - r, 0]
+  ];
 }
-
-const FR = {
-  cantor: {
-    name: 'Cantor set', base: 'cantor',
-    text: 'Cut the middle third out of a line, then out of every piece that remains, forever. What is left is 2 copies of itself at 1/3 scale: more than a scatter of points, less than a line.',
-    build: () => ({ maps: [sim(1 / 3, 0, 0, 0), sim(1 / 3, 0, 2 / 3, 0)], N: 2, s: 3 })
-  },
-  cantorD: {
-    name: 'Cantor set, any dimension (0–1)', base: 'cantor', range: [0.1, 0.99], def: 0.5,
-    text: 'Keep 2 end pieces at scale r and solve 2 · rᴰ = 1 for r. Small D throws away almost everything; D near 1 barely cuts anything.',
-    build: D => { const r = Math.pow(2, -1 / D); return { maps: [sim(r, 0, 0, 0), sim(r, 0, 1 - r, 0)], N: 2, s: 1 / r }; }
-  },
-  koch: {
-    name: 'Koch curve', base: 'seg',
-    text: 'Each segment becomes 4 segments, each 1/3 as long. Every iteration multiplies the length by 4/3, so the finished curve is infinitely long but encloses no area.',
-    build: () => koch(Math.PI / 3)
-  },
-  kochD: {
-    name: 'Bent Koch curve, any dimension (1–2)', base: 'seg', range: [1.01, 1.97], def: 1.5,
-    text: 'The same 4-piece rule, with the bump angle solved so that 4 · rᴰ = 1. A flat bump gives an ordinary line (D = 1). A bump near 90° folds the curve until it almost fills the plane (D → 2).',
-    build: D => { const k = Math.pow(4, 1 / D); return koch(Math.acos(Math.max(-1, Math.min(1, (k - 2) / 2)))); }
-  },
-  sier: {
-    name: 'Sierpinski triangle', base: 'tri',
-    text: 'Three half-size copies of itself. Doubling its size makes 3 copies, not the 4 a filled triangle would need, so its dimension sits between 1 and 2.',
-    build: () => ({ maps: [sim(.5, 0, 0, 0), sim(.5, 0, .5, 0), sim(.5, 0, .25, Math.sqrt(3) / 4)], N: 3, s: 2 })
-  },
-  carpet: {
-    name: 'Sierpinski carpet', base: 'sq',
-    text: 'Cut a square into a 3 × 3 grid and remove the middle. 8 copies at 1/3 scale.',
-    build: () => ({ maps: grid3((i, j) => !(i === 1 && j === 1)), N: 8, s: 3 })
-  },
-  vicsek: {
-    name: 'Vicsek fractal', base: 'sq',
-    text: 'Keep the four corners and the center of a 3 × 3 grid: 5 copies at 1/3 scale.',
-    build: () => ({ maps: grid3((i, j) => (i + j) % 2 === 0), N: 5, s: 3 })
-  },
-  dustD: {
-    name: 'Corner dust, any dimension (0–2)', base: 'sq', range: [0.2, 1.98], def: 1.3,
-    text: 'Keep the 4 corner squares at scale r, where 4 · rᴰ = 1. Below D = 1 it crumbles into dust. Near D = 2 the gaps close and it fills the square.',
-    build: D => { const r = Math.pow(4, -1 / D); return { maps: [sim(r, 0, 0, 0), sim(r, 0, 1 - r, 0), sim(r, 0, 0, 1 - r), sim(r, 0, 1 - r, 1 - r)], N: 4, s: 1 / r }; }
-  },
-  dragon: {
-    name: 'Heighway dragon', base: 'seg',
-    text: 'Fold a strip of paper in half again and again, then open every fold to 90°. 2 copies at 1/√2 scale, which makes dimension exactly 2: the curve fills area. Its boundary is a fractal of dimension about 1.52.',
-    build: () => ({ maps: [sim(Math.SQRT1_2, Math.PI / 4, 0, 0), sim(Math.SQRT1_2, 3 * Math.PI / 4, 1, 0)], N: 2, s: Math.SQRT2 })
-  },
-  coast: {
-    name: 'Random coastline (not self-similar)', base: 'coast', range: [1.05, 1.95], def: 1.3,
-    text: 'Real coastlines contain no exact copies of themselves. This one is built by random midpoint displacement with roughness H = 2 − D. It is only statistically self-similar, yet box counting still recovers its dimension.',
-    build: () => null
-  }
-};
-
-const fs = { type: 'koch', depth: 5, D: {}, seed: 7, color: true, geo: null, pts: null, bb: null, box: null, hover: -1 };
-
-function chaos(maps, n, rand) {
-  const pts = new Float32Array(n * 2);
-  let x = 0, y = 0;
-  for (let i = 0; i < n + 60; i++) {
-    const M = maps[(rand() * maps.length) | 0];
-    const nx = M[0] * x + M[1] * y + M[4];
-    y = M[2] * x + M[3] * y + M[5]; x = nx;
-    if (i >= 60) { pts[(i - 60) * 2] = x; pts[(i - 60) * 2 + 1] = y; }
+function kochPolyline(p, depth) {
+  let pts = [[0, 0], [1, 0]];
+  const c = Math.cos(p.theta), s = Math.sin(p.theta), r = p.r;
+  for (let d = 0; d < depth; d++) {
+    const out = [pts[0]];
+    for (let i = 0; i < pts.length - 1; i++) {
+      const [ax, ay] = pts[i], [bx, by] = pts[i + 1], vx = (bx - ax) * r, vy = (by - ay) * r;
+      const p1 = [ax + vx, ay + vy];
+      const p2 = [p1[0] + c * vx - s * vy, p1[1] + s * vx + c * vy];
+      out.push(p1, p2, [bx - vx, by - vy], pts[i + 1]);
+    }
+    pts = out;
   }
   return pts;
 }
+function kochPoints(p, n, rand) {
+  const maps = kochMaps(p), out = new Float64Array(n * 2);
+  let x = 0, y = 0;
+  for (let i = 0; i < n + 40; i++) {
+    const [a, b, tx, ty] = maps[(rand() * 4) | 0];
+    const nx = a * x - b * y + tx; y = b * x + a * y + ty; x = nx;
+    if (i >= 40) { out[(i - 40) * 2] = x; out[(i - 40) * 2 + 1] = y; }
+  }
+  return out;
+}
+// Profile of the swept shapes: Koch point (x, y) → radius from the axis and height along it
+const prof = (x, y) => [0.55 + y * 2, (x - 0.5) * 2.6];
 
-function coastline(D, levels, seed) {
-  const H = 2 - D, rand = mulberry32(seed);
-  let ys = [0, 0], amp = 0.35;
+function classify(D) {
+  if (D <= 0) return { mode: 'point', n: 0 };
+  const m = Math.round(D);
+  if (Math.abs(D - m) < 1e-9) return { mode: 'cube', n: m };
+  const n = Math.ceil(D);
+  if (n === 1) return { mode: 'cantor', n };
+  if (n === 2) return { mode: 'koch', n, f: D };
+  return { mode: 'spun', n, f: D - (n - 2) };
+}
+
+/* ---------------- three.js scene ---------------- */
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+stage.prepend(renderer.domElement);
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(40, 1, 0.01, 200);
+scene.add(new THREE.AmbientLight(0xb8b0ff, 0.45));
+const key = new THREE.DirectionalLight(0xffe2b8, 0.9); key.position.set(3, 4, 5); scene.add(key);
+const rim = new THREE.DirectionalLight(0x5fd6e8, 0.55); rim.position.set(-4, -1, -3); scene.add(rim);
+const axesGroup = new THREE.Group(); scene.add(axesGroup);
+let group = new THREE.Group(); group.matrixAutoUpdate = false; scene.add(group);
+const view = { theta: 0, phi: Math.PI / 2, dist: 4, target: new THREE.Vector3(), drag: null };
+
+const C1 = new THREE.Color('#5fd6e8'), C2 = new THREE.Color('#a98bff'), C3 = new THREE.Color('#ffb84d');
+function ramp(t, out) { // cyan → violet → amber
+  t = Math.max(0, Math.min(1, t));
+  return t < 0.5 ? out.copy(C1).lerp(C2, t * 2) : out.copy(C2).lerp(C3, t * 2 - 1);
+}
+
+function clearGroup() {
+  group.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); });
+  scene.remove(group); group = new THREE.Group(); group.matrixAutoUpdate = false; scene.add(group);
+}
+function drawAxes(n) {
+  axesGroup.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); });
+  axesGroup.clear();
+  for (let i = 0; i < Math.min(n, 3); i++) {
+    const a = new THREE.Vector3(), b = new THREE.Vector3();
+    a.setComponent(i, -2.4); b.setComponent(i, 2.4);
+    const g = new THREE.BufferGeometry().setFromPoints([a, b]);
+    const l = new THREE.Line(g, new THREE.LineDashedMaterial({ color: AXC[i], dashSize: 0.05, gapSize: 0.07, transparent: true, opacity: 0.45 }));
+    l.computeLineDistances(); axesGroup.add(l);
+  }
+}
+
+// High-dimensional shapes keep their n-D coordinates; every change re-projects them to 3D.
+let hd = null; // { n, base: Float32Array (count·n), points, edges?, edgeBase? }
+
+function buildPoint() {
+  group.add(new THREE.Mesh(new THREE.SphereGeometry(0.06, 24, 16), new THREE.MeshBasicMaterial({ color: 0xffb84d })));
+}
+function buildCantor(D, depth) {
+  const r = cantorR(D), W = 3, levels = depth + 1, gap = 0.22, thick = 0.07;
+  let segs = [[0, 1]], all = [];
   for (let l = 0; l < levels; l++) {
-    const nx = [];
-    for (let i = 0; i < ys.length - 1; i++) nx.push(ys[i], (ys[i] + ys[i + 1]) / 2 + gauss(rand) * amp);
-    nx.push(ys[ys.length - 1]);
-    ys = nx; amp *= Math.pow(2, -H);
+    all.push(...segs.map(s => [s[0], s[1], l]));
+    if (l < levels - 1) segs = segs.flatMap(([a, b]) => { const L = b - a; return [[a, a + L * r], [b - L * r, b]]; });
   }
-  return ys;
-}
-
-function bbox(pts) {
-  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
-  for (let i = 0; i < pts.length; i += 2) {
-    const x = pts[i], y = pts[i + 1];
-    if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
-  }
-  return { x0, y0, x1, y1, w: x1 - x0, h: y1 - y0 };
-}
-
-// Count occupied boxes at ε = L / 2^k and fit log N against log(1/ε).
-function boxCount(pts, bb) {
-  const L = Math.max(bb.w, bb.h) * 1.0001 || 1;
-  const rows = [];
-  for (let k = 1; k <= 8; k++) {
-    const n = 1 << k, grid = new Uint8Array(n * n);
-    let count = 0;
-    for (let i = 0; i < pts.length; i += 2) {
-      const ix = Math.min(n - 1, ((pts[i] - bb.x0) / L * n) | 0);
-      const iy = Math.min(n - 1, ((pts[i + 1] - bb.y0) / L * n) | 0);
-      const id = ix * n + iy;
-      if (!grid[id]) { grid[id] = 1; count++; }
-    }
-    rows.push({ k, count, x: k * Math.LN2, y: Math.log(count) });
-  }
-  const fit = rows.filter(r => r.k >= 2 && r.k <= 7);
-  const mx = fit.reduce((a, r) => a + r.x, 0) / fit.length, my = fit.reduce((a, r) => a + r.y, 0) / fit.length;
-  let sxy = 0, sxx = 0;
-  for (const r of fit) { sxy += (r.x - mx) * (r.y - my); sxx += (r.x - mx) ** 2; }
-  const slope = sxy / sxx;
-  return { rows, slope, icpt: my - slope * mx };
-}
-
-function fBuild() {
-  const F = FR[fs.type];
-  if (F.range && fs.D[fs.type] == null) fs.D[fs.type] = F.def;
-  const D = fs.D[fs.type];
-  const rand = mulberry32(12345);
-  if (F.base === 'coast') {
-    const ys = coastline(D, 12, fs.seed);
-    const n = ys.length - 1, pts = new Float32Array(n * 4 * 2);
-    for (let i = 0; i < n; i++) for (let s = 0; s < 4; s++) {
-      const t = s / 4, j = (i * 4 + s) * 2;
-      pts[j] = (i + t) / n; pts[j + 1] = ys[i] + (ys[i + 1] - ys[i]) * t;
-    }
-    fs.geo = { coast: ys, N: null, s: null };
-    fs.pts = pts;
-  } else {
-    fs.geo = F.build(D);
-    fs.pts = chaos(fs.geo.maps, 200000, rand);
-  }
-  fs.bb = bbox(fs.pts);
-  fs.box = boxCount(fs.pts, fs.bb);
-  fUI();
-  fDraw();
-}
-
-function fUI() {
-  const F = FR[fs.type], g = fs.geo;
-  $('#fDRow').hidden = !F.range;
-  if (F.range) {
-    const el = $('#fD');
-    el.min = F.range[0]; el.max = F.range[1];
-    el.value = fs.D[fs.type];
-    $('#fDOut').textContent = (+fs.D[fs.type]).toFixed(2);
-  }
-  $('#fDepthOut').textContent = F.base === 'coast' ? `${fs.depth + 3} levels` : fs.depth;
-  $('#fReroll').hidden = F.base !== 'coast';
-  $('#fColor').parentElement.hidden = F.base === 'coast' || F.base === 'cantor';
-  $('#fText').textContent = F.text;
-  let theory, formula;
-  if (F.base === 'coast') {
-    const D = fs.D[fs.type];
-    theory = D;
-    formula = `Roughness H = <em>${(2 - D).toFixed(2)}</em><br>Each finer level shrinks the bumps by 2<sup>−H</sup><br>D = 2 − H = <em>${D.toFixed(4)}</em> (statistical)`;
-  } else {
-    theory = Math.log(g.N) / Math.log(g.s);
-    formula = `N = <em>${g.N}</em> copies, each scaled by 1/s = 1/<em>${g.s.toFixed(3)}</em><br>` +
-      `N · (1/s)<sup>D</sup> = 1 &nbsp;⟹&nbsp; D = log N / log s<br>` +
-      `D = log ${g.N} / log ${g.s.toFixed(3)} = <em>${theory.toFixed(4)}</em>` +
-      (g.angle != null ? `<br>Bump angle θ = <em>${(g.angle * 180 / Math.PI).toFixed(1)}°</em>` : '');
-  }
-  $('#fTheory').innerHTML = `${theory.toFixed(4)}<small>exact</small>`;
-  $('#fFormula').innerHTML = formula;
-  const m = fs.box.slope;
-  $('#fMeasured').innerHTML = `${m.toFixed(3)}<small>off by ${Math.abs(m - theory).toFixed(3)}</small>`;
-}
-
-function fDraw() {
-  const c = $('#fc'), ctx = prep(c), w = c._w, h = c._h;
-  ctx.clearRect(0, 0, w, h);
-  const F = FR[fs.type], g = fs.geo, bb = fs.bb;
-  const pad = Math.max(24, Math.min(w, h) * 0.07);
-  let info = '';
-  if (F.base === 'cantor') {
-    const rows = fs.depth + 1, sc = (w - pad * 2) / (bb.w || 1);
-    const rowH = Math.min(46, (h - pad * 2) / rows), barH = rowH * 0.55;
-    const top = (h - rowH * rows) / 2;
-    let segs = [[0, 1]];
-    for (let l = 0; l < rows; l++) {
-      ctx.fillStyle = AXC[0];
-      ctx.globalAlpha = 1 - l * 0.05;
-      for (const [a, b] of segs) {
-        const x0 = pad + (a - bb.x0) * sc, x1 = pad + (b - bb.x0) * sc;
-        ctx.fillRect(x0, top + l * rowH, Math.max(0.6, x1 - x0), barH);
-      }
-      const nx = [];
-      for (const [a, b] of segs) for (const M of g.maps) nx.push([a + (b - a) * M[4], a + (b - a) * (M[4] + M[0])]);
-      segs = nx.length > 4096 ? segs : nx;
-    }
-    ctx.globalAlpha = 1;
-    info = `<b>${2 ** fs.depth}</b> pieces after ${fs.depth} cuts`;
-  } else if (F.base === 'coast') {
-    const levels = fs.depth + 3, step = 1 << (12 - levels), ys = g.coast;
-    const sc = Math.min((w - pad * 2) / bb.w, (h - pad * 2) / Math.max(bb.h, 0.3));
-    const ox = w / 2 - (bb.x0 + bb.w / 2) * sc, oy = h / 2 + (bb.y0 + bb.h / 2) * sc;
-    const n = ys.length - 1;
-    const p = new Path2D();
-    for (let i = 0; i <= n; i += step) {
-      const X = ox + (i / n) * sc, Y = oy - ys[i] * sc;
-      i === 0 ? p.moveTo(X, Y) : p.lineTo(X, Y);
-    }
-    const land = new Path2D(p);
-    land.lineTo(ox + sc, h); land.lineTo(ox, h); land.closePath();
-    ctx.fillStyle = 'rgba(255,184,77,0.10)'; ctx.fill(land);
-    ctx.strokeStyle = AXC[0]; ctx.lineWidth = 1.4; ctx.lineJoin = 'round'; ctx.stroke(p);
-    info = `<b>${n / step}</b> segments`;
-  } else {
-    const sc = Math.min((w - pad * 2) / (bb.w || 1), (h - pad * 2) / (bb.h || 1));
-    const cx = bb.x0 + bb.w / 2, cy = bb.y0 + bb.h / 2;
-    const V = [sc, 0, 0, -sc, w / 2 - cx * sc, h / 2 + cy * sc];
-    const cap = F.base === 'seg' ? 160000 : 70000;
-    const maxD = Math.floor(Math.log(cap) / Math.log(g.N));
-    const d = Math.min(fs.depth, maxD);
-    const add = (p, M) => {
-      if (F.base === 'seg') { p.moveTo(M[4], M[5]); p.lineTo(M[0] + M[4], M[2] + M[5]); return; }
-      const P = F.base === 'tri' ? [[0, 0], [1, 0], [.5, Math.sqrt(3) / 2]] : [[0, 0], [1, 0], [1, 1], [0, 1]];
-      P.forEach(([x, y], i) => {
-        const X = M[0] * x + M[1] * y + M[4], Y = M[2] * x + M[3] * y + M[5];
-        i ? p.lineTo(X, Y) : p.moveTo(X, Y);
-      });
-      p.closePath();
-    };
-    const rec = (p, M, k) => { if (k === 0) { add(p, M); return; } for (const m of g.maps) rec(p, comp(M, m), k - 1); };
-    const paint = (p, col) => {
-      if (F.base === 'seg') { ctx.strokeStyle = col; ctx.lineWidth = d > 5 ? 1 : 1.6; ctx.lineJoin = 'round'; ctx.stroke(p); }
-      else { ctx.fillStyle = col; ctx.fill(p); }
-    };
-    if (d === 0) { const p = new Path2D(); add(p, V); paint(p, AXC[0]); }
-    else g.maps.forEach((m, i) => {
-      const p = new Path2D(); rec(p, comp(V, m), d - 1);
-      paint(p, fs.color ? AXC[i % AXC.length] : AXC[0]);
-    });
-    info = `<b>${(g.N ** d).toLocaleString()}</b> pieces at depth ${d}` + (d < fs.depth ? ` (capped from ${fs.depth} to keep drawing fast)` : '');
-  }
-  $('#fOverlay').innerHTML = `<b>${F.name}</b><br>${info}`;
-  fChart();
-}
-
-function fChart() {
-  const c = $('#fChart'), ctx = prep(c), w = c._w, h = c._h;
-  ctx.clearRect(0, 0, w, h);
-  const css = getComputedStyle(document.documentElement);
-  const muted = css.getPropertyValue('--muted').trim(), line = css.getPropertyValue('--line').trim(), ink = css.getPropertyValue('--ink').trim();
-  const B = fs.box, rows = B.rows;
-  const L = 34, R = 22, T = 10, Bm = 26;
-  const xs = rows.map(r => r.k), ys = rows.map(r => Math.log2(r.count));
-  const x0 = 1, x1 = 8, y0 = 0, y1 = Math.max(4, Math.ceil(Math.max(...ys)));
-  const X = k => L + (k - x0) / (x1 - x0) * (w - L - R);
-  const Y = v => h - Bm - (v - y0) / (y1 - y0) * (h - T - Bm);
-  ctx.font = '10px ' + css.getPropertyValue('--mono');
-  ctx.lineWidth = 1;
-  ctx.strokeStyle = line; ctx.fillStyle = muted;
-  ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
-  const yStep = y1 > 10 ? 4 : 2;
-  for (let v = 0; v <= y1; v += yStep) {
-    ctx.beginPath(); ctx.moveTo(L, Y(v)); ctx.lineTo(w - R, Y(v)); ctx.stroke();
-    ctx.fillText('2' + sup(v), L - 5, Y(v));
-  }
-  ctx.textAlign = 'center'; ctx.textBaseline = 'top';
-  for (let k = 1; k <= 8; k++) ctx.fillText('1/' + (1 << k), X(k), h - Bm + 5);
-  ctx.textAlign = 'left'; ctx.textBaseline = 'top';
-  ctx.fillText('boxes', L + 4, T);
-  ctx.textAlign = 'right'; ctx.textBaseline = 'bottom';
-  ctx.fillText('box size ε', w - R, h - Bm - 3);
-  // fit line: log2 N = slope * k + icpt / ln 2
-  const fy = k => B.slope * k + B.icpt / Math.LN2;
-  ctx.strokeStyle = AXC[0]; ctx.lineWidth = 2;
-  ctx.beginPath(); ctx.moveTo(X(1.5), Y(fy(1.5))); ctx.lineTo(X(7.5), Y(fy(7.5))); ctx.stroke();
-  rows.forEach((r, i) => {
-    ctx.beginPath(); ctx.arc(X(xs[i]), Y(ys[i]), i === fs.hover ? 6 : 4, 0, TAU);
-    ctx.fillStyle = (r.k >= 2 && r.k <= 7) ? AXC[1] : muted; ctx.fill();
-    ctx.lineWidth = 2; ctx.strokeStyle = css.getPropertyValue('--panel'); ctx.stroke();
+  const mesh = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshStandardMaterial({ roughness: 0.5, metalness: 0.1 }), all.length);
+  const m = new THREE.Matrix4(), col = new THREE.Color();
+  all.forEach(([a, b, l], i) => {
+    m.makeScale(Math.max(0.004, (b - a) * W), thick, thick);
+    // the finished set sits on the x axis; faint rows above it show the construction steps
+    m.setPosition(((a + b) / 2 - 0.5) * W, (levels - 1 - l) * gap, 0);
+    mesh.setMatrixAt(i, m);
+    ramp((a + b) / 2, col);
+    if (l < levels - 1) col.multiplyScalar(0.45);
+    mesh.setColorAt(i, col);
   });
-  ctx.fillStyle = ink; ctx.textAlign = 'left'; ctx.textBaseline = 'bottom';
-  ctx.fillText(`slope ${B.slope.toFixed(3)}`, X(5.2), Y(fy(5.2)) - 8);
-  if (fs.hover >= 0) {
-    const r = rows[fs.hover], txt = `ε = 1/${1 << r.k} · ${r.count.toLocaleString()} boxes`;
-    const tw = ctx.measureText(txt).width + 12, px = Math.min(w - tw - 4, Math.max(4, X(r.k) - tw / 2)), py = Math.max(2, Y(ys[fs.hover]) - 28);
-    ctx.fillStyle = css.getPropertyValue('--raise'); ctx.strokeStyle = line; ctx.lineWidth = 1;
+  group.add(mesh);
+}
+function buildKoch(D, depth) {
+  const pts = kochPolyline(kochParams(D), Math.min(depth, 8));
+  const S = 3, n = pts.length, pos = new Float32Array(n * 3), cols = new Float32Array(n * 3), c = new THREE.Color();
+  let ymax = 0; for (const q of pts) ymax = Math.max(ymax, q[1]);
+  pts.forEach(([x, y], i) => { pos.set([(x - 0.5) * S, (y - ymax / 2) * S, 0], i * 3); ramp(i / (n - 1), c); cols.set([c.r, c.g, c.b], i * 3); });
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  g.setAttribute('color', new THREE.BufferAttribute(cols, 3));
+  group.add(new THREE.Line(g, new THREE.LineBasicMaterial({ vertexColors: true })));
+}
+function buildLathe(f, depth) {
+  const P = kochPolyline(kochParams(f), Math.min(depth, 6)).map(([x, y]) => prof(x, y));
+  const phiStart = 0.6, phiLen = TAU * 0.82;
+  const geo = new THREE.LatheGeometry(P.map(([r, h]) => new THREE.Vector2(r, h)), 180, phiStart, phiLen);
+  const uv = geo.attributes.uv, cols = new Float32Array(uv.count * 3), c = new THREE.Color();
+  for (let i = 0; i < uv.count; i++) { ramp(uv.getY(i), c); cols.set([c.r, c.g, c.b], i * 3); }
+  geo.setAttribute('color', new THREE.BufferAttribute(cols, 3));
+  group.add(new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.42, metalness: 0.15, side: THREE.DoubleSide })));
+  for (const phi of [phiStart, phiStart + phiLen]) {
+    const pos = new Float32Array(P.length * 3);
+    P.forEach(([r, h], i) => pos.set([Math.sin(phi) * r * 1.002, h, Math.cos(phi) * r * 1.002], i * 3));
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    group.add(new THREE.Line(g, new THREE.LineBasicMaterial({ color: 0xffffff })));
+  }
+}
+function buildCube(m) {
+  if (m === 1) { buildKoch(1, 0); return; }
+  if (m === 2) {
+    const g = new THREE.PlaneGeometry(2, 2);
+    group.add(new THREE.Mesh(g, new THREE.MeshStandardMaterial({ color: 0xa98bff, roughness: 0.5, side: THREE.DoubleSide })));
+    group.add(new THREE.LineSegments(new THREE.EdgesGeometry(g), new THREE.LineBasicMaterial({ color: 0xffb84d })));
+    return;
+  }
+  if (m === 3) {
+    const g = new THREE.BoxGeometry(2, 2, 2);
+    group.add(new THREE.Mesh(g, new THREE.MeshStandardMaterial({ color: 0xa98bff, roughness: 0.45, transparent: true, opacity: 0.85 })));
+    group.add(new THREE.LineSegments(new THREE.EdgesGeometry(g), new THREE.LineBasicMaterial({ color: 0xffb84d })));
+    return;
+  }
+  // m ≥ 4: a solid hypercube as a point cloud plus its edges
+  const rand = mulberry32(5), count = 60000, base = new Float32Array(count * m);
+  for (let i = 0; i < base.length; i++) base[i] = rand() * 2 - 1;
+  const verts = [];
+  for (let k = 0; k < (1 << m); k++) for (let i = 0; i < m; i++) if (!(k >> i & 1)) verts.push(k, k | 1 << i);
+  const edgeBase = new Float32Array(verts.length * m);
+  verts.forEach((k, j) => { for (let i = 0; i < m; i++) edgeBase[j * m + i] = (k >> i & 1) ? 1 : -1; });
+  makeHD(m, base, edgeBase, 0.016);
+}
+function buildSwept(n, f) {
+  // a Koch curve of dimension f, swept through the (n−2)-sphere around the y axis
+  const rand = mulberry32(11), count = n === 4 ? 90000 : 110000;
+  const k = kochPoints(kochParams(f), count, rand), base = new Float32Array(count * n);
+  for (let i = 0; i < count; i++) {
+    const [r, h] = prof(k[i * 2], k[i * 2 + 1]), u = sphereDir(n - 1, rand);
+    const o = i * n;
+    base[o] = r * u[0]; base[o + 1] = h;
+    for (let j = 2; j < n; j++) base[o + j] = r * u[j - 1];
+  }
+  makeHD(n, base, null, 0.014);
+}
+function makeHD(n, base, edgeBase, size) {
+  const count = base.length / n;
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(count * 3), 3));
+  g.setAttribute('color', new THREE.BufferAttribute(new Float32Array(count * 3), 3));
+  const points = new THREE.Points(g, new THREE.PointsMaterial({ size, vertexColors: true, transparent: true, opacity: 0.85, depthWrite: false, blending: THREE.AdditiveBlending }));
+  group.add(points);
+  let edges = null;
+  if (edgeBase) {
+    const eg = new THREE.BufferGeometry();
+    eg.setAttribute('position', new THREE.BufferAttribute(new Float32Array(edgeBase.length / n * 3), 3));
+    edges = new THREE.LineSegments(eg, new THREE.LineBasicMaterial({ color: 0xffb84d, transparent: true, opacity: 0.8 }));
+    group.add(edges);
+  }
+  hd = { n, base, points, edges, edgeBase };
+}
+
+/* ---------------- moving the shape: n translations, n(n−1)/2 rotation planes ---------------- */
+const mv = { t: [0, 0, 0, 0, 0, 0], ang: {}, flip: false };
+const planesOf = n => { const p = []; for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) p.push([i, j]); return p; };
+function rotation(n) {
+  const R = Array.from({ length: n }, (_, i) => Array.from({ length: n }, (_, j) => +(i === j)));
+  if (n === 1 && mv.flip) R[0][0] = -1;
+  for (const [i, j] of planesOf(n)) {
+    const a = mv.ang[i + '-' + j] || 0;
+    if (!a) continue;
+    const c = Math.cos(a), s = Math.sin(a);
+    for (let k = 0; k < n; k++) { const x = R[i][k], y = R[j][k]; R[i][k] = c * x - s * y; R[j][k] = s * x + c * y; }
+  }
+  return R;
+}
+const CAM4 = 4.5;
+function projectInto(n, R, src, dst, col) {
+  const q = new Float64Array(n), c = new THREE.Color(), cnt = src.length / n;
+  for (let p = 0; p < cnt; p++) {
+    const o = p * n;
+    for (let i = 0; i < n; i++) { let s = mv.t[i]; const Ri = R[i]; for (let k = 0; k < n; k++) s += Ri[k] * src[o + k]; q[i] = s; }
+    const w = q[3];
+    // remove each extra axis with a perspective divide, like a camera looking down that axis
+    for (let k = n - 1; k >= 3; k--) { const f = CAM4 / (CAM4 - q[k]); for (let i = 0; i < k; i++) q[i] *= f; }
+    dst[p * 3] = q[0]; dst[p * 3 + 1] = q[1]; dst[p * 3 + 2] = q[2];
+    if (col) { ramp((w + 1.6) / 3.2, c); col[p * 3] = c.r; col[p * 3 + 1] = c.g; col[p * 3 + 2] = c.b; }
+  }
+}
+function applyMove() {
+  const n = st.cls.n;
+  if (n === 0) { group.matrix.identity(); return; }
+  const R = rotation(n);
+  if (n <= 3) {
+    const M = [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
+    for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) M[i][j] = R[i][j];
+    group.matrix.set(M[0][0], M[0][1], M[0][2], mv.t[0], M[1][0], M[1][1], M[1][2], n > 1 ? mv.t[1] : 0, M[2][0], M[2][1], M[2][2], n > 2 ? mv.t[2] : 0, 0, 0, 0, 1);
+    group.matrixWorldNeedsUpdate = true;
+    return;
+  }
+  group.matrix.identity(); group.matrixWorldNeedsUpdate = true;
+  const pg = hd.points.geometry;
+  projectInto(n, R, hd.base, pg.attributes.position.array, pg.attributes.color.array);
+  pg.attributes.position.needsUpdate = true; pg.attributes.color.needsUpdate = true; pg.computeBoundingSphere();
+  if (hd.edges) {
+    const eg = hd.edges.geometry;
+    projectInto(n, R, hd.edgeBase, eg.attributes.position.array, null);
+    eg.attributes.position.needsUpdate = true; eg.computeBoundingSphere();
+  }
+}
+
+const deg = a => Math.round(a * 180 / Math.PI);
+function buildControls() {
+  const n = st.cls.n, planes = planesOf(n);
+  for (let i = n; i < 6; i++) mv.t[i] = 0;
+  for (const k of Object.keys(mv.ang)) { const [i, j] = k.split('-').map(Number); if (j >= n) delete mv.ang[k]; }
+  if (n !== 1) mv.flip = false;
+  $('#moveN').textContent = n === 0 ? 'no axes' : `${n} ${n === 1 ? 'axis' : 'axes'} · ${n === 1 ? '1 flip' : planes.length + (planes.length === 1 ? ' plane' : ' planes')}`;
+  $('#moveNote').textContent = n === 0
+    ? 'A point has zero dimensions, so there is no direction to slide in and nothing to turn. Raise D above 0 to get your first axis.'
+    : n === 1
+      ? 'One axis: slide along x. A rotation needs a plane of two axes, so in 1D the only turn is a flip (a half-turn seen from outside the line).'
+      : `A ${st.D.toFixed(3)}-dimensional shape needs ${n} axes. That gives ${n} directions to slide along and ${planes.length} planes to rotate in, one for every pair of axes.` + (n > 3 ? ` Rotations in planes that use ${AX.slice(3, n).join(' or ')} turn the shape through dimensions the screen can't show, so it seems to turn inside out.` : '');
+  const tag = i => `<b style="background:${AXC[i]}">${AX[i]}</b>`;
+  $('#trans').innerHTML = Array.from({ length: n }, (_, i) =>
+    `<label class="ctl"><span class="tag">${tag(i)}</span><input type="range" id="t${i}" min="-2" max="2" step="0.01" value="${mv.t[i]}" aria-label="Translate along ${AX[i]}"><output id="to${i}">${mv.t[i].toFixed(2)}</output></label>`).join('');
+  $('#rots').innerHTML = n === 1
+    ? `<label class="check"><input type="checkbox" id="flip" ${mv.flip ? 'checked' : ''}> Flip x → −x</label>`
+    : planes.map(([i, j]) => {
+      const k = i + '-' + j, a = mv.ang[k] || 0;
+      return `<label class="ctl"><span class="tag">${tag(i)}${tag(j)}</span><input type="range" id="r${k}" data-k="${k}" min="-3.1416" max="3.1416" step="0.01" value="${a}" aria-label="Rotate in the ${AX[i]}${AX[j]} plane"><output id="ro${k}">${deg(a)}°</output></label>`;
+    }).join('');
+  $('#tHead').hidden = $('#rHead').hidden = n === 0;
+  $('#reset').hidden = n === 0;
+}
+$('#trans').addEventListener('input', e => {
+  const i = +e.target.id.slice(1); mv.t[i] = +e.target.value; $('#to' + i).textContent = mv.t[i].toFixed(2); applyMove();
+});
+$('#rots').addEventListener('input', e => {
+  if (e.target.id === 'flip') { mv.flip = e.target.checked; applyMove(); return; }
+  const k = e.target.dataset.k; mv.ang[k] = +e.target.value; $('#ro' + k).textContent = deg(mv.ang[k]) + '°'; applyMove();
+});
+$('#reset').addEventListener('click', () => { mv.t = [0, 0, 0, 0, 0, 0]; mv.ang = {}; mv.flip = false; buildControls(); applyMove(); });
+
+/* ---------------- box counting ---------------- */
+function samplePoints(cls, D) {
+  const rand = mulberry32(2024), { mode, n } = cls;
+  if (mode === 'cantor') {
+    const r = cantorR(D), N = 200000, out = new Float64Array(N);
+    let x = 0;
+    for (let i = 0; i < N + 40; i++) { x = rand() < 0.5 ? r * x : r * x + 1 - r; if (i >= 40) out[i - 40] = x; }
+    return { dim: 1, pts: out };
+  }
+  if (mode === 'koch') return { dim: 2, pts: kochPoints(kochParams(D), 600000, rand) };
+  if (mode === 'cube') { const out = new Float64Array(500000 * n); for (let i = 0; i < out.length; i++) out[i] = rand() * 2 - 1; return { dim: n, pts: out }; }
+  // swept shapes: the sphere factor is smooth and contributes exactly n − 2, so only the
+  // profile curve needs measuring (sampled points can't resolve its roughness after sweeping)
+  return { dim: 2, pts: kochPoints(kochParams(cls.f), 600000, rand), add: n - 2 };
+}
+function boxCount({ dim, pts }) {
+  const N = pts.length / dim, lo = Array(dim).fill(Infinity), hi = Array(dim).fill(-Infinity);
+  for (let i = 0; i < N; i++) for (let d = 0; d < dim; d++) { const v = pts[i * dim + d]; if (v < lo[d]) lo[d] = v; if (v > hi[d]) hi[d] = v; }
+  const L = Math.max(...hi.map((h, d) => h - lo[d])) * 1.000001 || 1;
+  const K = [0, 20, 11, 8, 6, 5, 4][dim], rows = [];
+  for (let k = 1; k <= K; k++) {
+    const g = 1 << k, cells = g ** dim;
+    const grid = cells <= (1 << 24) ? new Uint8Array(cells) : null, seen = grid ? null : new Set();
+    let count = 0;
+    for (let i = 0; i < N; i++) {
+      let id = 0;
+      for (let d = 0; d < dim; d++) id = id * g + Math.min(g - 1, ((pts[i * dim + d] - lo[d]) / L * g) | 0);
+      if (grid) { if (!grid[id]) { grid[id] = 1; count++; } } else if (!seen.has(id)) { seen.add(id); count++; }
+    }
+    rows.push({ k, count });
+    if (count > N / 3) break; // finer grids would only count individual points
+  }
+  // use grids that the sample fills densely: on average at least 12 points per touched box
+  let fit = rows.filter(r => r.k >= 2 && r.count <= N / 12);
+  if (fit.length < 3) fit = rows.filter(r => r.count <= N / 12).slice(-3);
+  if (fit.length < 2) fit = rows.slice(0, 2);
+  fit.forEach(r => { r.used = true; });
+  const mx = fit.reduce((a, r) => a + r.k, 0) / fit.length, my = fit.reduce((a, r) => a + Math.log2(r.count), 0) / fit.length;
+  let sxy = 0, sxx = 0;
+  for (const r of fit) { sxy += (r.k - mx) * (Math.log2(r.count) - my); sxx += (r.k - mx) ** 2; }
+  const slope = sxy / sxx;
+  return { rows, K: rows.length, slope, icpt: my - slope * mx };
+}
+
+/* ---------------- panel text ---------------- */
+const st = { D: 1.5, depth: 6, cls: null, box: null, hover: -1 };
+const fmt = (v, n = 4) => v.toFixed(n);
+const degs = t => (t * 180 / Math.PI).toFixed(2) + '°';
+const SPH = ['', '', '', 'a circle', 'a 2-sphere', 'a 3-sphere', 'a 4-sphere'];
+
+function explain() {
+  const D = st.D, { mode, n, f } = st.cls;
+  let word, how, fm;
+  const osc = '<br><span class="step">the copies never overlap (open set condition), so by Moran\'s theorem this is the exact Hausdorff dimension</span>';
+  if (mode === 'point') {
+    word = 'point';
+    how = 'A single point. Scale it by any factor and you still have 1 copy, so N = 1 and D = 0.';
+    fm = `N · r<sup>D</sup> = 1 with N = 1 &nbsp;⟹&nbsp; D = <em>0</em>`;
+  } else if (mode === 'cube') {
+    word = ['', 'line segment', 'square', 'cube', 'tesseract', 'penteract', 'hexeract'][n];
+    how = `A whole number. A solid ${word} splits into 2${sup(n)} = ${2 ** n} copies of itself at half size.`;
+    fm = `N = 2<sup>${n}</sup> = <em>${2 ** n}</em>, r = 1/2<br>D = log ${2 ** n} / log 2 = <em>${n}</em>` + osc;
+  } else if (mode === 'cantor') {
+    const r = cantorR(D);
+    word = 'dust';
+    how = 'Less than a line: a Cantor set. Start with a segment and keep 2 shrunken copies at its ends, forever. The shrink factor r is solved so the dimension is exactly D. The faint rows above it show the first few cuts.';
+    fm = `<span class="step">2 copies, each scaled by r</span><br>2 · r<sup>D</sup> = 1 &nbsp;⟹&nbsp; r = 2<sup>−1/D</sup> = <em>${fmt(r, 5)}</em><br>` +
+      `<span class="step">check</span> log 2 / log(1/r) = <em>${fmt(Math.log(2) / Math.log(1 / r))}</em>` + osc;
+  } else if (mode === 'koch') {
+    const { r, theta } = kochParams(D);
+    word = 'curve';
+    how = 'Between a line and a surface: a Koch-type curve. Each segment becomes 4 pieces scaled by r with a bump in the middle. The dimension fixes r, and the bump angle θ is whatever keeps the 4 pieces reaching end to end.';
+    fm = `<span class="step">4 copies, each scaled by r</span><br>4 · r<sup>D</sup> = 1 &nbsp;⟹&nbsp; r = 4<sup>−1/D</sup> = <em>${fmt(r, 5)}</em><br>` +
+      `<span class="step">pieces must span the base</span><br>2r + 2r·cos θ = 1 &nbsp;⟹&nbsp; θ = <em>${degs(theta)}</em><br>` +
+      `<span class="step">check</span> log 4 / log(1/r) = <em>${fmt(Math.log(4) / Math.log(1 / r))}</em>` + osc;
+  } else {
+    const { r, theta } = kochParams(f), m = n - 2;
+    word = n === 3 ? 'rough surface' : `rough ${n - 1}D hypersurface`;
+    how = n === 3
+      ? `Between a surface and a solid. A Koch-type curve of dimension ${fmt(f, 3)} (white edge) is swept around the y axis through a full circle. Sweeping along a smooth circle adds exactly 1.`
+      : `This lives in ${n}D. A Koch-type curve of dimension ${fmt(f, 3)} is swept around the y axis through every direction in the other ${n - 1} axes, which traces out ${SPH[n]}. A smooth ${m}-sphere adds exactly ${m}. The screen shows a perspective projection, colored by the w coordinate.`;
+    fm = `<span class="step">profile curve, dimension D − ${m}</span><br>4 · r<sup>${fmt(f, 3)}</sup> = 1 &nbsp;⟹&nbsp; r = <em>${fmt(r, 5)}</em>, θ = <em>${degs(theta)}</em><br>` +
+      `<span class="step">sweep it along ${SPH[n]} (dimension ${m})</span><br>dim(K × S<sup>${m}</sup>) = dim K + ${m} = ${fmt(f)} + ${m} = <em>${fmt(D)}</em>` + osc;
+  }
+  $('#Dword').textContent = word;
+  $('#how').textContent = how;
+  $('#formula').innerHTML = fm;
+  const detail = mode === 'cantor' ? ` · ${st.depth} cuts, ${2 ** st.depth} pieces` : mode === 'koch' ? ` · ${(4 ** Math.min(st.depth, 8)).toLocaleString()} segments` : '';
+  $('#overlay').innerHTML = `<b>D = ${fmt(D)}</b> · ${word} · lives in ${n}D${n > 3 ? ', projected to 3D' : ''}${detail}`;
+  $('#legend').hidden = n < 4;
+}
+
+function measure() {
+  const cls = st.cls;
+  $('#boxCard').hidden = cls.mode === 'point';
+  if (cls.mode === 'point') return;
+  const sample = samplePoints(cls, st.D);
+  st.box = boxCount(sample);
+  const add = sample.add || 0;
+  $('#measured').innerHTML = add
+    ? `${(st.box.slope + add).toFixed(3)}<small>profile ${st.box.slope.toFixed(3)} + sphere ${add}, target ${st.D.toFixed(3)}</small>`
+    : `${st.box.slope.toFixed(3)}<small>measured, target ${st.D.toFixed(3)}</small>`;
+  drawChart();
+}
+
+function prep(c) {
+  const r = c.getBoundingClientRect(), d = Math.min(window.devicePixelRatio || 1, 2);
+  c.width = Math.max(1, Math.round(r.width * d)); c.height = Math.max(1, Math.round(r.height * d));
+  const ctx = c.getContext('2d'); ctx.setTransform(d, 0, 0, d, 0, 0);
+  c._w = r.width; c._h = r.height; return ctx;
+}
+function sup(n) { return String(n).split('').map(d => '⁰¹²³⁴⁵⁶⁷⁸⁹'[d]).join(''); }
+function drawChart() {
+  const B = st.box; if (!B || $('#boxCard').hidden) return;
+  const c = $('#chart'), ctx = prep(c), w = c._w, h = c._h;
+  const css = getComputedStyle(document.documentElement), tok = n => css.getPropertyValue(n).trim();
+  const L = 34, R = 26, T = 12, Bm = 26, K = Math.max(2, B.K);
+  const ys = B.rows.map(r => Math.log2(r.count)), y1 = Math.max(4, Math.ceil(Math.max(...ys)));
+  const X = k => L + (k - 1) / (K - 1) * (w - L - R), Y = v => h - Bm - v / y1 * (h - T - Bm);
+  ctx.clearRect(0, 0, w, h);
+  ctx.font = '10px ' + tok('--mono'); ctx.lineWidth = 1; ctx.strokeStyle = tok('--line'); ctx.fillStyle = tok('--muted');
+  ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+  const step = y1 > 12 ? 4 : 2;
+  for (let v = 0; v <= y1; v += step) { ctx.beginPath(); ctx.moveTo(L, Y(v)); ctx.lineTo(w - R, Y(v)); ctx.stroke(); ctx.fillText('2' + sup(v), L - 5, Y(v)); }
+  ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  const every = K > 9 ? 2 : 1;
+  for (let k = 1; k <= K; k += every) ctx.fillText('1/' + (1 << k), X(k), h - Bm + 5);
+  ctx.textAlign = 'left'; ctx.fillText('boxes touched', L + 4, T - 8);
+  ctx.textAlign = 'right'; ctx.textBaseline = 'bottom'; ctx.fillText('box size ε', w - R, h - Bm - 3);
+  const used = B.rows.filter(r => r.used), k0 = used[0].k - 0.4, k1 = used[used.length - 1].k + 0.4;
+  const fy = k => B.slope * k + B.icpt;
+  ctx.strokeStyle = tok('--amber'); ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(X(k0), Y(fy(k0))); ctx.lineTo(X(k1), Y(fy(k1))); ctx.stroke();
+  B.rows.forEach((r, i) => {
+    ctx.beginPath(); ctx.arc(X(r.k), Y(ys[i]), i === st.hover ? 6 : 4, 0, TAU);
+    ctx.fillStyle = r.used ? tok('--cyan') : tok('--muted'); ctx.fill();
+    ctx.lineWidth = 2; ctx.strokeStyle = tok('--panel'); ctx.stroke();
+  });
+  const lk = (k0 + k1) / 2;
+  ctx.fillStyle = tok('--ink'); ctx.textAlign = 'left'; ctx.textBaseline = 'bottom';
+  ctx.fillText(`slope ${B.slope.toFixed(3)}`, Math.min(w - R - 70, X(lk) + 8), Y(fy(lk)) - 6);
+  if (st.hover >= 0) {
+    const r = B.rows[st.hover], txt = `ε = 1/${1 << r.k} · ${r.count.toLocaleString()} boxes`;
+    const tw = ctx.measureText(txt).width + 12, px = Math.min(w - tw - 4, Math.max(4, X(r.k) - tw / 2)), py = Math.max(2, Y(ys[st.hover]) - 28);
+    ctx.fillStyle = tok('--raise'); ctx.strokeStyle = tok('--line'); ctx.lineWidth = 1;
     ctx.beginPath(); ctx.roundRect(px, py, tw, 18, 4); ctx.fill(); ctx.stroke();
-    ctx.fillStyle = ink; ctx.textBaseline = 'middle'; ctx.fillText(txt, px + 6, py + 9);
+    ctx.fillStyle = tok('--ink'); ctx.textBaseline = 'middle'; ctx.fillText(txt, px + 6, py + 9);
   }
   c._X = X; c._Y = Y; c._ys = ys;
 }
-function sup(n) { return String(n).split('').map(d => '⁰¹²³⁴⁵⁶⁷⁸⁹'[d]).join(''); }
 
-(function fInit() {
-  const sel = $('#fType');
-  const order = ['cantor', 'cantorD', 'koch', 'kochD', 'sier', 'vicsek', 'carpet', 'dustD', 'dragon', 'coast'];
-  for (const k of order) { const o = document.createElement('option'); o.value = k; o.textContent = FR[k].name; sel.append(o); }
-  sel.value = fs.type;
-  sel.onchange = () => { fs.type = sel.value; fBuild(); };
-  let t;
-  $('#fD').oninput = e => {
-    fs.D[fs.type] = +e.target.value;
-    $('#fDOut').textContent = (+e.target.value).toFixed(2);
-    clearTimeout(t); t = setTimeout(fBuild, 40);
-  };
-  $('#fDepth').oninput = e => { fs.depth = +e.target.value; fUI(); fDraw(); };
-  $('#fColor').onchange = e => { fs.color = e.target.checked; fDraw(); };
-  $('#fReroll').onclick = () => { fs.seed = (Math.random() * 1e9) | 0; fBuild(); };
-  const ch = $('#fChart');
-  ch.addEventListener('pointermove', e => {
-    if (!ch._X) return;
-    const r = ch.getBoundingClientRect(), mx = e.clientX - r.left, my = e.clientY - r.top;
-    let best = -1, bd = 22;
-    fs.box.rows.forEach((row, i) => { const d = Math.hypot(ch._X(row.k) - mx, ch._Y(ch._ys[i]) - my); if (d < bd) { bd = d; best = i; } });
-    if (best !== fs.hover) { fs.hover = best; fChart(); }
-  });
-  ch.addEventListener('pointerleave', () => { fs.hover = -1; fChart(); });
-})();
-
-/* ================================================================
-   HYPERSHAPES
-   Points live in R^n, get rotated by an n×n orthogonal matrix, then
-   each axis above the 3rd is removed with a perspective divide.
-   ================================================================ */
-const hs = { n: 4, shape: 'cube', V: [], E: [], points: false, R: [], planes: [], speeds: [], plane: 'all', speed: 1, persp: true, yaw: 0.55, pitch: -0.35, scale: 1 };
-const binom = (n, k) => { if (k < 0 || k > n) return 0; let r = 1; for (let i = 1; i <= k; i++) r = r * (n - k + i) / i; return Math.round(r); };
-const CUBE = ['Point', 'Line segment', 'Square', 'Cube', 'Tesseract', 'Penteract', 'Hexeract', 'Hepteract', 'Octeract', 'Enneract', 'Dekeract'];
-const SIMP = ['Point', 'Line segment', 'Triangle', 'Tetrahedron', '5-cell (pentachoron)'];
-const ORTH = ['Point', 'Line segment', 'Square (diamond)', 'Octahedron', '16-cell'];
-const FACE = ['Vertices', 'Edges', 'Faces', 'Cells'];
-
-function hBuild() {
-  const n = hs.n, rand = mulberry32(99);
-  let V = [], E = [], points = false;
-  const vec = () => new Float64Array(n);
-  if (hs.shape === 'cube') {
-    for (let m = 0; m < (1 << n); m++) { const v = vec(); for (let i = 0; i < n; i++) v[i] = (m >> i & 1) ? 1 : -1; V.push(v); }
-    for (let m = 0; m < (1 << n); m++) for (let i = 0; i < n; i++) if (!(m >> i & 1)) E.push([m, m | 1 << i]);
-  } else if (hs.shape === 'simplex' || hs.shape === 'sierp') {
-    if (n === 0) V.push(vec());
-    else {
-      for (let i = 0; i < n; i++) { const v = vec(); v[i] = 1; V.push(v); }
-      const a = (1 - Math.sqrt(n + 1)) / n, v = vec(); v.fill(a); V.push(v);
-      const c = vec(); for (const p of V) for (let i = 0; i < n; i++) c[i] += p[i] / V.length;
-      for (const p of V) for (let i = 0; i < n; i++) p[i] -= c[i];
-    }
-    if (hs.shape === 'simplex') { for (let i = 0; i < V.length; i++) for (let j = i + 1; j < V.length; j++) E.push([i, j]); }
-    else {
-      const corners = V; V = []; points = true;
-      let p = vec();
-      for (let k = 0; k < 24000; k++) {
-        const c = corners[(rand() * corners.length) | 0];
-        const q = vec(); for (let i = 0; i < n; i++) q[i] = (p[i] + c[i]) / 2;
-        p = q; if (k > 20) V.push(q);
-      }
-    }
-  } else if (hs.shape === 'orthoplex') {
-    if (n === 0) V.push(vec());
-    for (let i = 0; i < n; i++) { const a = vec(), b = vec(); a[i] = 1; b[i] = -1; V.push(a, b); }
-    for (let i = 0; i < V.length; i++) for (let j = i + 1; j < V.length; j++) if ((i >> 1) !== (j >> 1)) E.push([i, j]);
-  } else if (hs.shape === 'sphere') {
-    points = true;
-    if (n === 0) V.push(vec());
-    else for (let k = 0; k < 3000; k++) {
-      const v = vec(); let s = 0;
-      for (let i = 0; i < n; i++) { v[i] = gauss(rand); s += v[i] * v[i]; }
-      s = Math.sqrt(s) || 1; for (let i = 0; i < n; i++) v[i] /= s;
-      V.push(v);
-    }
-  } else if (hs.shape === 'cantor') {
-    points = true;
-    let p = vec();
-    for (let k = 0; k < 24000; k++) {
-      const q = vec();
-      for (let i = 0; i < n; i++) q[i] = (p[i] + 2 * (rand() < .5 ? -1 : 1)) / 3;
-      p = q; if (k > 20) V.push(q);
-    }
+/* ---------------- rebuild on change ---------------- */
+function rebuild(remeasure = true) {
+  const prev = st.cls, cls = classify(st.D);
+  st.cls = cls;
+  clearGroup(); hd = null;
+  if (cls.mode === 'point') buildPoint();
+  else if (cls.mode === 'cube') buildCube(cls.n);
+  else if (cls.mode === 'cantor') buildCantor(st.D, st.depth);
+  else if (cls.mode === 'koch') buildKoch(st.D, st.depth);
+  else if (cls.n === 3) buildLathe(cls.f, st.depth);
+  else buildSwept(cls.n, cls.f);
+  if (!prev || prev.n !== cls.n) {
+    view.theta = cls.n >= 3 ? 0.55 : 0;
+    view.phi = cls.n >= 3 ? 1.15 : Math.PI / 2;
+    view.dist = [3, 5.4, 5.2, 6.4, 6.6, 6.6, 6.6][cls.n];
+    drawAxes(cls.n);
+    buildControls();
   }
-  let mx = 0;
-  for (const v of V) { let s = 0; for (let i = 0; i < n; i++) s += v[i] * v[i]; mx = Math.max(mx, s); }
-  mx = Math.sqrt(mx) || 1;
-  for (const v of V) for (let i = 0; i < n; i++) v[i] /= mx;
-  hs.V = V; hs.E = E; hs.points = points;
-  hs.R = Array.from({ length: n }, (_, i) => { const r = new Float64Array(n); r[i] = 1; return r; });
-  hs.planes = [];
-  for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) hs.planes.push([i, j]);
-  hs.speeds = hs.planes.map(([i, j]) => (rand() < .5 ? -1 : 1) * (j < 3 ? 0.08 + rand() * 0.1 : 0.2 + rand() * 0.35));
-  const sel = $('#hPlane'), prev = hs.plane;
-  sel.innerHTML = '';
-  const add = (v, t) => { const o = document.createElement('option'); o.value = v; o.textContent = t; sel.append(o); };
-  add('all', n < 2 ? 'Nothing to rotate below 2D' : 'Tumble through every plane');
-  hs.planes.forEach(([i, j], k) => add(String(k), `Only the ${AX[i]}–${AX[j]} plane` + (j >= 3 ? '' : ' (ordinary 3D spin)')));
-  hs.plane = [...sel.options].some(o => o.value === prev) ? prev : 'all';
-  sel.value = hs.plane;
-  hStats();
+  applyMove();
+  $('#depth').closest('label').hidden = !(cls.mode === 'cantor' || cls.mode === 'koch' || (cls.mode === 'spun' && cls.n === 3));
+  explain();
+  if (remeasure) { clearTimeout(rebuild.t); rebuild.t = setTimeout(measure, 200); }
 }
 
-function hStats() {
-  const n = hs.n, s = hs.shape;
-  $('#hNOut').textContent = n + 'D';
-  const rows = [];
-  let name = '', note = '';
-  if (s === 'cube' || s === 'simplex' || s === 'orthoplex') {
-    for (let k = 0; k <= Math.min(n - (s === 'orthoplex' ? 1 : 0), 9); k++) {
-      if (k === n && n > 0) continue;
-      const f = s === 'cube' ? binom(n, k) * 2 ** (n - k) : s === 'simplex' ? binom(n + 1, k + 1) : 2 ** (k + 1) * binom(n, k + 1);
-      rows.push([FACE[k] || `${k}-faces`, f.toLocaleString()]);
-    }
-    if (n === 0) rows.length = 0, rows.push(['Vertices', '1']);
-    name = s === 'cube' ? (CUBE[n] || n + '-cube') : s === 'simplex' ? (SIMP[n] || n + '-simplex') : (ORTH[n] || n + '-orthoplex');
-    if (s === 'cube') {
-      rows.push(['Long diagonal / side', '√' + n + ' = ' + Math.sqrt(n).toFixed(3)]);
-      note = `Building a ${n + 1}-cube: take two ${n}-cubes and join every pair of matching corners. That is why the vertex count doubles each time.`;
-    } else if (s === 'simplex') note = `Each step adds one new point joined to every existing point. ${n + 1} points, all equally far apart.`;
-    else note = `One point on each side of every axis: ${2 * n} vertices. Every pair is joined except opposite points.`;
-    rows.push(['Dimension', String(n)]);
-  } else if (s === 'sphere') {
-    let Vn = [1, 2]; for (let k = 2; k <= n; k++) Vn[k] = Vn[k - 2] * TAU / k;
-    name = n === 0 ? 'Point' : n === 1 ? 'Two points (0-sphere)' : n === 2 ? 'Circle' : n === 3 ? 'Sphere' : `${n - 1}-sphere in ${n}D`;
-    rows.push(['Unit ball volume', Vn[n].toFixed(4)], ['Surface area', (n * Vn[n]).toFixed(4)], ['Surface dimension', String(Math.max(0, n - 1))]);
-    note = 'The volume of a unit ball peaks at 5 dimensions (5.2638), then falls toward 0. In high dimensions almost all of a ball sits near its surface.';
-  } else {
-    const D = n === 0 ? 0 : s === 'sierp' ? Math.log(n + 1) / Math.log(2) : n * Math.log(2) / Math.log(3);
-    name = s === 'sierp' ? `Sierpinski ${n}-simplex` : `Cantor dust in ${n}D`;
-    rows.push(['Copies N', s === 'sierp' ? String(n + 1) : (2 ** n).toLocaleString()], ['Scale', s === 'sierp' ? '1/2' : '1/3'], ['Fractal dimension', D.toFixed(4)], ['Room it lives in', n + 'D']);
-    note = s === 'sierp'
-      ? `${n + 1} half-size copies give D = log ${n + 1} / log 2. In 3D this is the Sierpinski tetrahedron, with dimension exactly 2.`
-      : `2ⁿ corner copies at 1/3 scale give D = n · log 2 / log 3 = n × 0.6309. It always fills ${(Math.log(2) / Math.log(3) * 100).toFixed(1)}% of the room's dimension.`;
-  }
-  $('#hName').textContent = name;
-  $('#hStats').innerHTML = rows.map(([a, b]) => `<dt>${a}</dt><dd>${b}</dd>`).join('');
-  $('#hNote').textContent = note;
-  $('#hOverlay').innerHTML = `<b>${name}</b> · ${n}D → 3D → your 2D screen<br>${hs.points ? hs.V.length.toLocaleString() + ' points' : hs.V.length.toLocaleString() + ' vertices · ' + hs.E.length.toLocaleString() + ' edges'}`;
+function setD(v, from) {
+  v = Math.max(0, Math.min(5.999, +v || 0));
+  st.D = v;
+  if (from !== 'num') $('#Dnum').value = +v.toFixed(4);
+  if (from !== 'range') $('#D').value = Math.min(5.99, v);
+  rebuild();
 }
+$('#D').addEventListener('input', e => setD(e.target.value, 'range'));
+$('#Dnum').addEventListener('input', e => { if (e.target.value !== '') setD(e.target.value, 'num'); });
+$('#Dnum').addEventListener('change', e => setD(e.target.value));
+$('#depth').addEventListener('input', e => { st.depth = +e.target.value; $('#depthOut').textContent = st.depth; rebuild(false); });
 
-function hRotate(dt) {
-  const n = hs.n, R = hs.R;
-  if (n < 2) return;
-  const turn = (i, j, a) => {
-    const c = Math.cos(a), s = Math.sin(a), ri = R[i], rj = R[j];
-    for (let k = 0; k < n; k++) { const x = ri[k], y = rj[k]; ri[k] = c * x - s * y; rj[k] = s * x + c * y; }
-  };
-  if (hs.plane === 'all') hs.planes.forEach(([i, j], k) => turn(i, j, hs.speeds[k] * dt * hs.speed));
-  else { const [i, j] = hs.planes[+hs.plane]; turn(i, j, 0.7 * dt * hs.speed); }
-  // Gram–Schmidt keeps the matrix orthogonal as rounding errors pile up
-  for (let i = 0; i < n; i++) {
-    for (let j = 0; j < i; j++) { let d = 0; for (let k = 0; k < n; k++) d += R[i][k] * R[j][k]; for (let k = 0; k < n; k++) R[i][k] -= d * R[j][k]; }
-    let s = 0; for (let k = 0; k < n; k++) s += R[i][k] ** 2; s = Math.sqrt(s); for (let k = 0; k < n; k++) R[i][k] /= s;
-  }
-}
+const CHIPS = [
+  ['Cantor set', Math.log(2) / Math.log(3)],
+  ['Britain’s coast', 1.25],
+  ['Koch snowflake', Math.log(4) / Math.log(3)],
+  ['Sierpinski triangle', Math.log(3) / Math.log(2)],
+  ['Menger sponge', Math.log(20) / Math.log(3)],
+  ['Tesseract', 4]
+];
+$('#chips').innerHTML = CHIPS.map(([n, v], i) => `<button data-i="${i}" title="Set D to ${v.toFixed(4)}">${n}<b>${+v.toFixed(3)}</b></button>`).join('');
+$('#chips').addEventListener('click', e => { const b = e.target.closest('button'); if (b) setD(CHIPS[+b.dataset.i][1]); });
 
-const HUE = Array.from({ length: 9 }, (_, i) => {
-  // cyan (−w) through violet to rose (+w)
-  const t = i / 8, a = [95, 214, 232], m = [169, 139, 255], b = [255, 111, 145];
-  const mix = (p, q, u) => p.map((v, k) => Math.round(v + (q[k] - v) * u));
-  const c = t < .5 ? mix(a, m, t * 2) : mix(m, b, t * 2 - 2 * .5);
-  return `rgb(${c[0]},${c[1]},${c[2]})`;
+const chart = $('#chart');
+chart.addEventListener('pointermove', e => {
+  if (!chart._X || !st.box) return;
+  const r = chart.getBoundingClientRect(), mx = e.clientX - r.left, my = e.clientY - r.top;
+  let best = -1, bd = 22;
+  st.box.rows.forEach((row, i) => { const d = Math.hypot(chart._X(row.k) - mx, chart._Y(chart._ys[i]) - my); if (d < bd) { bd = d; best = i; } });
+  if (best !== st.hover) { st.hover = best; drawChart(); }
 });
+chart.addEventListener('pointerleave', () => { st.hover = -1; drawChart(); });
 
-function hDraw(dt) {
-  hRotate(dt);
-  const c = $('#hc'), ctx = prep(c), w = c._w, h = c._h;
-  ctx.clearRect(0, 0, w, h);
-  const n = hs.n, R = hs.R, cam = 2.6, cam3 = 3.2;
-  const cy = Math.cos(hs.yaw), sy = Math.sin(hs.yaw), cp = Math.cos(hs.pitch), sp = Math.sin(hs.pitch);
-  const P = new Float32Array(hs.V.length * 2), C = new Uint8Array(hs.V.length), Z = new Float32Array(hs.V.length);
-  const q = new Float64Array(Math.max(n, 3));
-  let maxr = 0;
-  hs.V.forEach((v, idx) => {
-    q.fill(0);
-    for (let i = 0; i < n; i++) { let s = 0; const r = R[i]; for (let k = 0; k < n; k++) s += r[k] * v[k]; q[i] = s; }
-    const tint = n >= 4 ? q[3] : n === 3 ? q[2] : 0;
-    for (let k = n - 1; k >= 3; k--) {
-      const f = hs.persp ? (cam - 1) / (cam - q[k]) : 1;
-      for (let i = 0; i < k; i++) q[i] *= f;
-    }
-    let x = q[0], y = q[1], z = q[2];
-    const x1 = cy * x + sy * z, z1 = -sy * x + cy * z;
-    const y1 = cp * y - sp * z1, z2 = sp * y + cp * z1;
-    const f3 = hs.persp ? cam3 / (cam3 - z2) : 1;
-    P[idx * 2] = x1 * f3; P[idx * 2 + 1] = y1 * f3; Z[idx] = z2;
-    maxr = Math.max(maxr, Math.hypot(x1 * f3, y1 * f3));
-    C[idx] = Math.max(0, Math.min(8, Math.round((tint + 1) * 4)));
-  });
-  hs.scale += ((maxr || 1) - hs.scale) * Math.min(1, dt * 4);
-  const S = Math.min(w, h) * 0.42 / Math.max(hs.scale, 0.05), ox = w / 2, oy = h / 2;
-  ctx.globalCompositeOperation = 'lighter';
-  if (hs.points) {
-    const sz = hs.V.length > 5000 ? 1.3 : 2.2;
-    for (let b = 0; b < 9; b++) {
-      ctx.fillStyle = HUE[b]; ctx.globalAlpha = hs.V.length > 5000 ? 0.55 : 0.85;
-      for (let i = 0; i < hs.V.length; i++) if (C[i] === b) ctx.fillRect(ox + P[i * 2] * S - sz / 2, oy - P[i * 2 + 1] * S - sz / 2, sz, sz);
-    }
-  } else {
-    const many = hs.E.length > 1500;
-    ctx.lineWidth = many ? 0.8 : 1.6;
-    ctx.globalAlpha = many ? 0.45 : 0.85;
-    for (let b = 0; b < 9; b++) {
-      ctx.strokeStyle = HUE[b]; ctx.beginPath();
-      for (const [a, e] of hs.E) {
-        if (Math.round((C[a] + C[e]) / 2) !== b) continue;
-        ctx.moveTo(ox + P[a * 2] * S, oy - P[a * 2 + 1] * S);
-        ctx.lineTo(ox + P[e * 2] * S, oy - P[e * 2 + 1] * S);
-      }
-      ctx.stroke();
-    }
-    if (hs.V.length <= 256) {
-      ctx.globalAlpha = 1;
-      for (let i = 0; i < hs.V.length; i++) {
-        ctx.fillStyle = HUE[C[i]];
-        ctx.beginPath(); ctx.arc(ox + P[i * 2] * S, oy - P[i * 2 + 1] * S, n === 0 ? 6 : 2.6 + Z[i] * 0.8, 0, TAU); ctx.fill();
-      }
-    }
-  }
-  ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
+/* ---------------- camera orbit ---------------- */
+stage.addEventListener('pointerdown', e => { view.drag = [e.clientX, e.clientY]; stage.setPointerCapture(e.pointerId); });
+stage.addEventListener('pointermove', e => {
+  if (!view.drag) return;
+  view.theta -= (e.clientX - view.drag[0]) * 0.008;
+  view.phi = Math.max(0.05, Math.min(Math.PI - 0.05, view.phi - (e.clientY - view.drag[1]) * 0.008));
+  view.drag = [e.clientX, e.clientY];
+});
+const endDrag = () => { view.drag = null; };
+stage.addEventListener('pointerup', endDrag); stage.addEventListener('pointercancel', endDrag);
+stage.addEventListener('wheel', e => { e.preventDefault(); view.dist = Math.max(0.3, Math.min(30, view.dist * Math.exp(e.deltaY * 0.001))); }, { passive: false });
+
+function resize() {
+  const r = stage.getBoundingClientRect();
+  renderer.setSize(r.width, r.height, false);
+  camera.aspect = r.width / Math.max(1, r.height); camera.updateProjectionMatrix();
 }
+new ResizeObserver(() => { resize(); drawChart(); }).observe(stage);
 
-(function hInit() {
-  $('#hN').oninput = e => { hs.n = +e.target.value; hBuild(); };
-  $('#hShape').onchange = e => { hs.shape = e.target.value; hBuild(); };
-  $('#hPlane').onchange = e => { hs.plane = e.target.value; };
-  $('#hSpeed').oninput = e => { hs.speed = +e.target.value; $('#hSpeedOut').textContent = hs.speed.toFixed(2) + '×'; };
-  $('#hSpeedOut').textContent = '1.00×';
-  $('#hPersp').onchange = e => { hs.persp = e.target.checked; };
-  const c = $('#hc'); let drag = null;
-  c.addEventListener('pointerdown', e => { drag = [e.clientX, e.clientY]; c.setPointerCapture(e.pointerId); });
-  c.addEventListener('pointermove', e => {
-    if (!drag) return;
-    hs.yaw += (e.clientX - drag[0]) * 0.01;
-    hs.pitch = Math.max(-1.5, Math.min(1.5, hs.pitch + (e.clientY - drag[1]) * 0.01));
-    drag = [e.clientX, e.clientY];
-  });
-  c.addEventListener('pointerup', () => { drag = null; });
-  c.addEventListener('pointercancel', () => { drag = null; });
-  hBuild();
-})();
-
-/* ================================================================
-   EXPLORE
-   The world is N-dimensional. You are a 2D creature: you only ever see
-   the x–y slice through your own position in every hidden axis.
-   Objects are N-dimensional boxes and balls; collisions are full N-D.
-   ================================================================ */
-const CS = 5, G = 8, EXT = 10, PR = 0.36, WT = 0.5;
-const PAIRS = [null, null, ['KeyQ', 'KeyE'], ['KeyZ', 'KeyC'], ['KeyF', 'KeyR'], ['KeyG', 'KeyT']];
-const ws = { N: 4, seed: 1, pos: [], objs: [], gems: [], jellies: [], portal: null, got: 0, won: false, side: 2, face: [1, 0], walk: 0, keys: {}, rings: [], ringT: 0, toastT: 0, t: 0, hud: 0 };
-
-function box(cx, cy, hx, hy, spans, kind, axis) {
-  const c = [cx, cy], h = [hx, hy];
-  for (let k = 2; k < ws.N; k++) { const [lo, hi] = spans[k] || [-2, EXT + 2]; c.push((lo + hi) / 2); h.push((hi - lo) / 2); }
-  return { t: 'box', c, h, kind, axis };
-}
-function distTo(p, o) {
-  let s = 0;
-  if (o.t === 'box') { for (let i = 0; i < p.length; i++) { const d = Math.abs(p[i] - o.c[i]) - o.h[i]; if (d > 0) s += d * d; } return Math.sqrt(s); }
-  for (let i = 0; i < p.length; i++) s += (p[i] - o.c[i]) ** 2;
-  return Math.sqrt(s) - o.r;
-}
-// Cross-section of an object in the plane of axes a, b through point p. e = how far away it is in the other axes (0 = visible).
-function slice(o, a, b, p) {
-  let e2 = 0;
-  if (o.t === 'box') {
-    for (let i = 0; i < p.length; i++) { if (i === a || i === b) continue; const d = Math.abs(p[i] - o.c[i]) - o.h[i]; if (d > 0) e2 += d * d; }
-    return { e: Math.sqrt(e2), x0: o.c[a] - o.h[a], x1: o.c[a] + o.h[a], y0: o.c[b] - o.h[b], y1: o.c[b] + o.h[b] };
-  }
-  for (let i = 0; i < p.length; i++) { if (i === a || i === b) continue; e2 += (p[i] - o.c[i]) ** 2; }
-  const rem = o.r * o.r - e2;
-  return { e: rem > 0 ? 0 : Math.sqrt(e2) - o.r, cx: o.c[a], cy: o.c[b], r: rem > 0 ? Math.sqrt(rem) : 0 };
-}
-
-function wGen(N, seed) {
-  ws.N = N; ws.seed = seed;
-  const rand = mulberry32(seed * 7919 + N);
-  const R = (a, b) => a + rand() * (b - a);
-  const objs = [];
-  const partial = () => {
-    if (N < 3) return null;
-    const ax = 2 + ((rand() * (N - 2)) | 0), spans = {};
-    spans[ax] = rand() < .5 ? [-2, R(3.5, 6)] : [R(4, 6.5), EXT + 2];
-    return { spans, ax };
-  };
-  // perfect maze on a G×G grid (recursive backtracker)
-  const seen = Array.from({ length: G }, () => Array(G).fill(false));
-  const vw = Array.from({ length: G }, () => Array(G).fill(true)); // wall east of (i,j)
-  const hw = Array.from({ length: G }, () => Array(G).fill(true)); // wall south of (i,j)
-  const stack = [[0, 0]]; seen[0][0] = true;
-  while (stack.length) {
-    const [i, j] = stack[stack.length - 1];
-    const nb = [[1, 0], [-1, 0], [0, 1], [0, -1]].map(([dx, dy]) => [i + dx, j + dy, dx, dy]).filter(([x, y]) => x >= 0 && y >= 0 && x < G && y < G && !seen[x][y]);
-    if (!nb.length) { stack.pop(); continue; }
-    const [x, y, dx, dy] = nb[(rand() * nb.length) | 0];
-    if (dx === 1) vw[i][j] = false; if (dx === -1) vw[x][y] = false;
-    if (dy === 1) hw[i][j] = false; if (dy === -1) hw[x][y] = false;
-    seen[x][y] = true; stack.push([x, y]);
-  }
-  const span = G * CS;
-  objs.push(box(span / 2, -WT / 2, span / 2 + WT, WT / 2, {}, 'wall'), box(span / 2, span + WT / 2, span / 2 + WT, WT / 2, {}, 'wall'),
-    box(-WT / 2, span / 2, WT / 2, span / 2 + WT, {}, 'wall'), box(span + WT / 2, span / 2, WT / 2, span / 2 + WT, {}, 'wall'));
-  const wall = (cx, cy, hx, hy, closed) => {
-    if (closed) {
-      const p = rand() < .45 ? partial() : null;
-      objs.push(p ? box(cx, cy, hx, hy, p.spans, 'partial', p.ax) : box(cx, cy, hx, hy, {}, 'wall'));
-    } else if (N > 2 && rand() < .38) {
-      // an open doorway that is sealed in part of a hidden axis
-      const p = partial(); objs.push(box(cx, cy, hx, hy, p.spans, 'partial', p.ax));
-    }
-  };
-  for (let i = 0; i < G; i++) for (let j = 0; j < G; j++) {
-    if (i < G - 1) wall((i + 1) * CS, j * CS + CS / 2, WT / 2, CS / 2 + WT / 2, vw[i][j]);
-    if (j < G - 1) wall(i * CS + CS / 2, (j + 1) * CS, CS / 2 + WT / 2, WT / 2, hw[i][j]);
-  }
-  const cells = [];
-  for (let i = 0; i < G; i++) for (let j = 0; j < G; j++) if (i + j > 0 && !(i === G - 1 && j === G - 1)) cells.push([i, j]);
-  for (let k = cells.length - 1; k > 0; k--) { const m = (rand() * (k + 1)) | 0; [cells[k], cells[m]] = [cells[m], cells[k]]; }
-  const center = ([i, j]) => [i * CS + CS / 2, j * CS + CS / 2];
-  const extra = (lo, hi) => { const a = []; for (let k = 2; k < N; k++) a.push(R(lo, hi)); return a; };
-  const nGems = N === 2 ? 4 : 5;
-  const gems = cells.slice(0, nGems).map(cell => {
-    const [x, y] = center(cell);
-    return { t: 'ball', c: [x + R(-1, 1), y + R(-1, 1), ...extra(1.5, 8.5)], r: 0.7, got: false };
-  });
-  const props = [];
-  for (const cell of cells.slice(nGems)) {
-    const [x, y] = center(cell), roll = rand();
-    if (roll < .3) props.push({ t: 'ball', c: [x + R(-.5, .5), y + R(-.5, .5), ...extra(2, 8)], r: R(0.9, 1.5), kind: 'pillar' });
-    else if (roll < .45 && N > 2) {
-      const spans = {}; for (let k = 2; k < N; k++) { const a = R(0, 7); spans[k] = [a, a + R(2, 4)]; }
-      props.push(box(x + R(-.6, .6), y + R(-.6, .6), R(.5, 1), R(.5, 1), spans, 'block'));
-    }
-  }
-  const start = [CS / 2, CS / 2, ...Array(N - 2).fill(EXT / 2)];
-  const portal = { t: 'ball', c: [(G - 1) * CS + CS / 2, (G - 1) * CS + CS / 2, ...Array(N - 2).fill(EXT / 2)], r: 1.1 };
-  // keep props clear of crystals, the start and the exit
-  const keep = props.filter(o => [...gems, portal, { t: 'ball', c: start, r: 0 }].every(g => distTo(g.c, o) > 1.4));
-  ws.objs = objs.concat(keep);
-  ws.gems = gems; ws.portal = portal; ws.pos = start; ws.got = 0; ws.won = false;
-  ws.jellies = N === 2 ? [] : Array.from({ length: 4 }, () => ({
-    t: 'ball', base: [R(4, span - 4), R(4, span - 4), ...extra(2, 8)], c: [], r: R(1.1, 1.7),
-    ph: Array.from({ length: N }, () => R(0, TAU)), sp: Array.from({ length: N }, () => R(.15, .4))
-  }));
-  ws.side = Math.min(Math.max(2, ws.side), N - 1);
-  $('#wWin').hidden = true;
-  wPanel();
-  toast(N === 2
-    ? 'Flatland. Up, down, left, right, and nothing else. Grab the 4 crystals, then reach the exit ring.'
-    : `This world has ${N} dimensions, but you only see 2. Walls tinted with an axis color exist in only part of that hidden axis: step along it (${PAIRS[2][0].slice(3)}/${PAIRS[2][1].slice(3)}) to slip past.`, 7);
-}
-
-function wPanel() {
-  const N = ws.N;
-  $('#wDims').querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(+b.dataset.n === N)));
-  $('#wDimText').textContent = N === 2
-    ? 'You are a flat creature in a flat world. There is nowhere else to go.'
-    : `${N - 2} hidden ${N - 2 === 1 ? 'axis' : 'axes'} (${AX.slice(2, N).join(', ')}). Objects that live partly in them grow, shrink and vanish as you step through.`;
-  $('#wCoords').innerHTML = Array.from({ length: N }, (_, k) => `
-    <div class="coord"><span class="chip" style="background:${AXC[k]}">${AX[k]}</span><span id="wc${k}">0.0</span>
-    ${k < 2 ? `<span class="key">${k === 0 ? 'A / D or ◀ ▶' : 'W / S or ▲ ▼'}</span>` : `<span class="bar"><i id="wb${k}" style="background:${AXC[k]}"></i></span>`}</div>`).join('');
-  const keys = ['<kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> or arrows: walk in x and y'];
-  for (let k = 2; k < N; k++) keys.push(`<kbd>${PAIRS[k][0].slice(3)}</kbd> / <kbd>${PAIRS[k][1].slice(3)}</kbd>: step − / + along <b style="color:${AXC[k]}">${AX[k]}</b>`);
-  $('#wKeys').innerHTML = keys.join('<br>');
-  const sel = $('#wSideAxis');
-  sel.innerHTML = '';
-  for (let k = 2; k < N; k++) { const o = document.createElement('option'); o.value = k; o.textContent = `x and ${AX[k]}`; sel.append(o); }
-  sel.value = ws.side;
-  $('#wSideCard').hidden = N === 2;
-  $('#wPadExtra').innerHTML = Array.from({ length: N - 2 }, (_, i) => {
-    const k = i + 2;
-    return `<div style="display:flex;gap:4px"><button data-k="${PAIRS[k][0]}" style="color:${AXC[k]}" aria-label="Step minus ${AX[k]}">${AX[k]}−</button><button data-k="${PAIRS[k][1]}" style="color:${AXC[k]}" aria-label="Step plus ${AX[k]}">${AX[k]}+</button></div>`;
-  }).join('');
-  ws.hud = 0;
-}
-
-function toast(msg, secs = 4) { const t = $('#wToast'); t.textContent = msg; t.style.opacity = 1; ws.toastT = secs; }
-
-function collides(p) {
-  for (const o of ws.objs) if (distTo(p, o) < PR) return true;
-  return false;
-}
-
-function wUpdate(dt) {
-  ws.t += dt;
-  const N = ws.N, K = ws.keys;
-  if (ws.toastT > 0) { ws.toastT -= dt; if (ws.toastT <= 0) $('#wToast').style.opacity = 0; }
-  for (const j of ws.jellies) for (let k = 0; k < N; k++) j.c[k] = j.base[k] + Math.sin(ws.t * j.sp[k] + j.ph[k]) * (k < 2 ? 3 : 3.2);
-  ws.rings = ws.rings.filter(r => (r.t += dt) < 0.8);
-  if (ws.won) return;
-  let dx = (K.KeyD || K.ArrowRight || K.right ? 1 : 0) - (K.KeyA || K.ArrowLeft || K.left ? 1 : 0);
-  let dy = (K.KeyS || K.ArrowDown || K.down ? 1 : 0) - (K.KeyW || K.ArrowUp || K.up ? 1 : 0);
-  const moving = dx || dy;
-  if (moving) { const l = Math.hypot(dx, dy); dx /= l; dy /= l; ws.face = [dx, dy]; ws.walk += dt * 12; }
-  const sp = 6 * dt;
-  const tryMove = (axis, d) => {
-    if (!d) return false;
-    const np = ws.pos.slice(); np[axis] += d;
-    if (axis >= 2) np[axis] = Math.max(PR, Math.min(EXT - PR, np[axis]));
-    if (np[axis] === ws.pos[axis]) return false;
-    if (collides(np)) return false;
-    ws.pos = np; return true;
-  };
-  tryMove(0, dx * sp); tryMove(1, dy * sp);
-  ws.ringT -= dt;
-  for (let k = 2; k < N; k++) {
-    const d = (K[PAIRS[k][1]] ? 1 : 0) - (K[PAIRS[k][0]] ? 1 : 0);
-    if (d && tryMove(k, d * 3 * dt) && ws.ringT <= 0) { ws.rings.push({ t: 0, k, dir: d }); ws.ringT = 0.12; }
-  }
-  for (const g of ws.gems) if (!g.got && distTo(ws.pos, g) < PR) {
-    g.got = true; ws.got++;
-    ws.rings.push({ t: 0, k: 0, dir: 1, big: true });
-    const left = ws.gems.length - ws.got;
-    toast(left ? `Crystal ${ws.got} of ${ws.gems.length}. ${left} left.` : 'All crystals found. The exit ring is open in the far corner.');
-  }
-  if (ws.got === ws.gems.length && distTo(ws.pos, ws.portal) < PR) {
-    ws.won = true;
-    $('#wWinTitle').textContent = `You escaped ${ws.N}D space`;
-    $('#wWinText').textContent = ws.N === 2
-      ? 'Flatland is easy. Try 3 dimensions next and step through walls you cannot see around.'
-      : ws.N < 6 ? `Now try ${ws.N + 1}D: one more hidden direction to get lost in.` : 'Six dimensions, four of them invisible. Not many flat creatures can say that.';
-    $('#wWin').hidden = false;
-  }
-}
-
-function wDraw() {
-  const c = $('#wc'), ctx = prep(c), w = c._w, h = c._h, p = ws.pos, N = ws.N;
-  const S = Math.max(20, Math.min(42, Math.min(w, h) / 16));
-  const X = x => w / 2 + (x - p[0]) * S, Y = y => h / 2 + (y - p[1]) * S;
-  const ghost = $('#wGhost').checked, GR = 2.5;
-  ctx.clearRect(0, 0, w, h);
-  // floor grid, one line per maze cell
-  ctx.strokeStyle = 'rgba(144,140,173,0.10)'; ctx.lineWidth = 1; ctx.beginPath();
-  for (let i = 0; i <= G; i++) { ctx.moveTo(X(i * CS), Y(0)); ctx.lineTo(X(i * CS), Y(G * CS)); ctx.moveTo(X(0), Y(i * CS)); ctx.lineTo(X(G * CS), Y(i * CS)); }
-  ctx.stroke();
-  const tint = (hex, a) => { const n = parseInt(hex.slice(1), 16); return `rgba(${n >> 16},${n >> 8 & 255},${n & 255},${a})`; };
-  // objects
-  for (const o of ws.objs) {
-    const s = slice(o, 0, 1, p);
-    if (o.t === 'box') {
-      const x0 = X(s.x0), y0 = Y(s.y0), bw = (s.x1 - s.x0) * S, bh = (s.y1 - s.y0) * S;
-      if (x0 > w || y0 > h || x0 + bw < 0 || y0 + bh < 0) continue;
-      const col = o.kind === 'partial' ? AXC[o.axis] : o.kind === 'block' ? AXC[2] : '#3a4166';
-      if (s.e === 0) {
-        ctx.fillStyle = o.kind === 'wall' ? '#1c2139' : tint(col, o.kind === 'block' ? 0.28 : 0.35);
-        ctx.fillRect(x0, y0, bw, bh);
-        ctx.strokeStyle = col; ctx.lineWidth = 1.2; ctx.strokeRect(x0 + .5, y0 + .5, bw - 1, bh - 1);
-      } else if (ghost && s.e < GR) {
-        ctx.setLineDash([4, 4]); ctx.strokeStyle = tint(col, 0.55 * (1 - s.e / GR)); ctx.lineWidth = 1;
-        ctx.strokeRect(x0 + .5, y0 + .5, bw - 1, bh - 1); ctx.setLineDash([]);
-      }
-    } else {
-      const cx = X(s.cx), cy = Y(s.cy);
-      if (s.e === 0) {
-        const g = ctx.createRadialGradient(cx - s.r * S * .3, cy - s.r * S * .3, 1, cx, cy, s.r * S);
-        g.addColorStop(0, tint(AXC[1], 0.65)); g.addColorStop(1, tint(AXC[2], 0.35));
-        ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, cy, s.r * S, 0, TAU); ctx.fill();
-        ctx.strokeStyle = AXC[1]; ctx.lineWidth = 1; ctx.stroke();
-      } else if (ghost && s.e < GR) {
-        ctx.setLineDash([3, 4]); ctx.strokeStyle = tint(AXC[1], 0.5 * (1 - s.e / GR));
-        ctx.beginPath(); ctx.arc(cx, cy, Math.max(3, (o.r - s.e) * S), 0, TAU); ctx.stroke(); ctx.setLineDash([]);
-      }
-    }
-  }
-  // drifting hyper-jellies: harmless, but they show how a 4D ball looks to a flat creature
-  for (const j of ws.jellies) {
-    const s = slice(j, 0, 1, p);
-    if (s.e > 0) continue;
-    const cx = X(s.cx), cy = Y(s.cy), r = s.r * S;
-    ctx.fillStyle = 'rgba(255,111,145,0.18)'; ctx.strokeStyle = 'rgba(255,111,145,0.7)'; ctx.lineWidth = 1.2;
-    ctx.beginPath(); ctx.arc(cx, cy, r, 0, TAU); ctx.fill(); ctx.stroke();
-    if (r > 9) {
-      ctx.fillStyle = '#ece9f7';
-      ctx.beginPath(); ctx.arc(cx - r * .3, cy - r * .1, r * .12, 0, TAU); ctx.arc(cx + r * .3, cy - r * .1, r * .12, 0, TAU); ctx.fill();
-    }
-  }
-  // crystals
-  ctx.font = '600 11px ' + getComputedStyle(document.documentElement).getPropertyValue('--mono');
-  ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
-  for (const g of ws.gems) {
-    if (g.got) continue;
-    const s = slice(g, 0, 1, p), cx = X(s.cx), cy = Y(s.cy);
-    if (s.e === 0) {
-      const r = (0.25 + s.r) * S, spin = ws.t * 1.5;
-      const glow = ctx.createRadialGradient(cx, cy, 0, cx, cy, r * 2);
-      glow.addColorStop(0, 'rgba(255,184,77,0.45)'); glow.addColorStop(1, 'rgba(255,184,77,0)');
-      ctx.fillStyle = glow; ctx.beginPath(); ctx.arc(cx, cy, r * 2, 0, TAU); ctx.fill();
-      ctx.fillStyle = AXC[0]; ctx.beginPath();
-      for (let i = 0; i < 4; i++) { const a = spin + i * TAU / 4, rr = i % 2 ? r * .6 : r; ctx.lineTo(cx + Math.cos(a) * rr, cy + Math.sin(a) * rr); }
-      ctx.closePath(); ctx.fill();
-    } else {
-      // where to step to find it: the biggest hidden offset
-      let best = 2, bv = 0;
-      for (let k = 2; k < N; k++) { const d = g.c[k] - p[k]; if (Math.abs(d) > Math.abs(bv)) { bv = d; best = k; } }
-      const pulse = 0.5 + 0.5 * Math.sin(ws.t * 3);
-      ctx.strokeStyle = tint(AXC[0], 0.35 + pulse * 0.3); ctx.lineWidth = 1.5; ctx.setLineDash([2, 3]);
-      ctx.beginPath(); ctx.arc(cx, cy, 8 + pulse * 3, 0, TAU); ctx.stroke(); ctx.setLineDash([]);
-      ctx.fillStyle = AXC[best];
-      ctx.fillText(`${AX[best]} ${bv > 0 ? '+' : '−'}${Math.abs(bv).toFixed(1)}`, cx, cy - 14);
-    }
-  }
-  // exit ring
-  {
-    const s = slice(ws.portal, 0, 1, p), cx = X(s.cx), cy = Y(s.cy), open = ws.got === ws.gems.length;
-    if (s.e === 0) {
-      ctx.lineWidth = 3;
-      for (let i = 0; i < 3; i++) {
-        ctx.strokeStyle = open ? AXC[(i + 2) % 5] : 'rgba(144,140,173,0.5)';
-        ctx.beginPath(); ctx.arc(cx, cy, s.r * S * (0.5 + i * 0.25), ws.t * (i + 1) * (open ? 1 : .2), ws.t * (i + 1) * (open ? 1 : .2) + 4.5); ctx.stroke();
-      }
-      ctx.fillStyle = open ? AXC[0] : '#908cad'; ctx.textBaseline = 'top';
-      ctx.fillText(open ? 'EXIT' : 'EXIT · locked', cx, cy + s.r * S + 4);
-      ctx.textBaseline = 'bottom';
-    } else if (ghost) {
-      ctx.strokeStyle = 'rgba(144,140,173,0.4)'; ctx.setLineDash([2, 3]);
-      ctx.beginPath(); ctx.arc(cx, cy, 10, 0, TAU); ctx.stroke(); ctx.setLineDash([]);
-    }
-  }
-  // movement ripples: growing for +, shrinking for −
-  for (const r of ws.rings) {
-    const u = r.t / 0.8, rad = (r.big ? 0.6 + u * 2.5 : r.dir > 0 ? 0.5 + u * 1.2 : 1.7 - u * 1.2) * S;
-    ctx.strokeStyle = tint(AXC[r.k], (1 - u) * 0.8); ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.arc(w / 2, h / 2, Math.max(1, rad), 0, TAU); ctx.stroke();
-  }
-  drawGuy(ctx, w / 2, h / 2, S);
-  $('#wOverlay').innerHTML = `<b>${N}D world</b> · you see the x–y slice${N > 2 ? ` at ${AX.slice(2, N).map((a, i) => `${a} = ${p[i + 2].toFixed(1)}`).join(', ')}` : ''}`;
-  if (N > 2) wSide();
-  if ((ws.hud -= 1) <= 0) {
-    ws.hud = 6;
-    for (let k = 0; k < N; k++) {
-      const el = document.getElementById('wc' + k); if (el) el.textContent = p[k].toFixed(1);
-      const b = document.getElementById('wb' + k); if (b) b.style.left = (p[k] / EXT * 100) + '%';
-    }
-    $('#wGems').textContent = `${ws.got} / ${ws.gems.length}`;
-  }
-}
-
-function drawGuy(ctx, x, y, S) {
-  const R = 0.46 * S, f = ws.face, step = Math.sin(ws.walk), N = ws.N;
-  const hue = N > 2 ? 30 + (ws.pos[2] / EXT) * 300 : 36;
-  // shadow
-  ctx.fillStyle = 'rgba(0,0,0,0.35)';
-  ctx.beginPath(); ctx.ellipse(x, y + R * 0.95, R * 0.8, R * 0.25, 0, 0, TAU); ctx.fill();
-  // feet
-  ctx.fillStyle = `hsl(${hue},45%,30%)`;
-  ctx.beginPath(); ctx.ellipse(x - R * .42, y + R * .8 + step * R * .12, R * .28, R * .18, 0, 0, TAU); ctx.fill();
-  ctx.beginPath(); ctx.ellipse(x + R * .42, y + R * .8 - step * R * .12, R * .28, R * .18, 0, 0, TAU); ctx.fill();
-  // body
-  const bob = Math.abs(step) * R * .06;
-  const g = ctx.createRadialGradient(x - R * .35, y - R * .45 - bob, R * .1, x, y - bob, R * 1.1);
-  g.addColorStop(0, `hsl(${hue},95%,78%)`); g.addColorStop(1, `hsl(${hue},70%,48%)`);
-  ctx.fillStyle = g;
-  ctx.beginPath(); ctx.ellipse(x, y - bob, R, R * 1.02, 0, 0, TAU); ctx.fill();
-  // antenna, tipped with the color of the hidden axis you moved along last
-  const tip = ws.rings.length ? AXC[ws.rings[ws.rings.length - 1].k] : '#ece9f7';
-  ctx.strokeStyle = `hsl(${hue},45%,30%)`; ctx.lineWidth = 2;
-  ctx.beginPath(); ctx.moveTo(x, y - R - bob); ctx.quadraticCurveTo(x + R * .3, y - R * 1.5 - bob, x + R * .15, y - R * 1.75 - bob); ctx.stroke();
-  ctx.fillStyle = tip; ctx.beginPath(); ctx.arc(x + R * .15, y - R * 1.75 - bob, R * .17, 0, TAU); ctx.fill();
-  // eyes look where you walk
-  const ex = f[0] * R * .18, ey = f[1] * R * .14;
-  for (const s of [-1, 1]) {
-    ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.ellipse(x + s * R * .36 + ex * .5, y - R * .18 - bob + ey * .5, R * .22, R * .27, 0, 0, TAU); ctx.fill();
-    ctx.fillStyle = '#14162a'; ctx.beginPath(); ctx.arc(x + s * R * .36 + ex, y - R * .16 - bob + ey, R * .11, 0, TAU); ctx.fill();
-  }
-}
-
-function wSide() {
-  const c = $('#ws'), ctx = prep(c), w = c._w, h = c._h, p = ws.pos, k = ws.side;
-  ctx.clearRect(0, 0, w, h);
-  const sx = w / 26, sy = (h - 20) / EXT;
-  const X = x => w / 2 + (x - p[0]) * sx, Y = v => h - 10 - v * sy;
-  const tint = (hex, a) => { const n = parseInt(hex.slice(1), 16); return `rgba(${n >> 16},${n >> 8 & 255},${n & 255},${a})`; };
-  ctx.fillStyle = 'rgba(144,140,173,0.06)'; ctx.fillRect(0, Y(EXT), w, EXT * sy);
-  for (const o of ws.objs) {
-    const s = slice(o, 0, k, p);
-    if (s.e > 0) continue;
-    if (o.t === 'box') {
-      const x0 = X(s.x0), x1 = X(s.x1), y0 = Y(Math.min(EXT, s.y1)), y1 = Y(Math.max(0, s.y0));
-      if (x1 < 0 || x0 > w) continue;
-      const col = o.kind === 'partial' ? AXC[o.axis] : o.kind === 'block' ? AXC[2] : '#3a4166';
-      ctx.fillStyle = o.kind === 'wall' ? '#1c2139' : tint(col, .45); ctx.fillRect(x0, y0, Math.max(1.5, x1 - x0), y1 - y0);
-      ctx.strokeStyle = col; ctx.lineWidth = 1; ctx.strokeRect(x0, y0, Math.max(1.5, x1 - x0), y1 - y0);
-    } else {
-      ctx.fillStyle = tint(AXC[1], .35); ctx.strokeStyle = AXC[1];
-      ctx.beginPath(); ctx.ellipse(X(s.cx), Y(s.cy), s.r * sx, s.r * sy, 0, 0, TAU); ctx.fill(); ctx.stroke();
-    }
-  }
-  for (const g of ws.gems) {
-    if (g.got) continue;
-    const s = slice(g, 0, k, p);
-    if (s.e > 0) continue;
-    ctx.fillStyle = AXC[0]; ctx.beginPath(); ctx.ellipse(X(s.cx), Y(s.cy), Math.max(2, s.r * sx), Math.max(2, s.r * sy), 0, 0, TAU); ctx.fill();
-  }
-  ctx.setLineDash([5, 4]); ctx.strokeStyle = 'rgba(236,233,247,0.6)'; ctx.lineWidth = 1;
-  ctx.beginPath(); ctx.moveTo(0, Y(p[k])); ctx.lineTo(w, Y(p[k])); ctx.stroke(); ctx.setLineDash([]);
-  ctx.fillStyle = `hsl(${30 + (p[2] / EXT) * 300},90%,65%)`;
-  ctx.beginPath(); ctx.arc(w / 2, Y(p[k]), 4, 0, TAU); ctx.fill();
-  ctx.font = '600 11px ' + getComputedStyle(document.documentElement).getPropertyValue('--mono');
-  ctx.fillStyle = AXC[k]; ctx.textAlign = 'left'; ctx.textBaseline = 'top'; ctx.fillText(`↑ ${AX[k]}`, 6, 4);
-  ctx.fillStyle = AXC[0]; ctx.textAlign = 'right'; ctx.textBaseline = 'bottom'; ctx.fillText('x →', w - 6, h - 2);
-}
-
-(function wInit() {
-  const dims = $('#wDims');
-  for (let n = 2; n <= 6; n++) {
-    const b = document.createElement('button'); b.textContent = n + 'D'; b.dataset.n = n;
-    b.setAttribute('aria-pressed', 'false'); b.setAttribute('aria-label', `${n}-dimensional world`);
-    b.style.width = 'auto'; b.style.padding = '0 10px';
-    b.onclick = () => wGen(n, ws.seed + 1);
-    dims.append(b);
-  }
-  $('#wNew').onclick = () => wGen(ws.N, ws.seed + 1);
-  $('#wAgain').onclick = () => wGen(Math.min(6, ws.N + (ws.N < 6 ? 1 : 0)), ws.seed + 1);
-  $('#wSideAxis').onchange = e => { ws.side = +e.target.value; };
-  const game = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'];
-  addEventListener('keydown', e => {
-    if (tab !== 'world' || e.target.matches('input, select, textarea')) return;
-    ws.keys[e.code] = true;
-    if (game.includes(e.code)) e.preventDefault();
-  });
-  addEventListener('keyup', e => { ws.keys[e.code] = false; });
-  addEventListener('blur', () => { ws.keys = {}; });
-  const pad = $('#wPad');
-  pad.addEventListener('pointerdown', e => { const b = e.target.closest('button'); if (!b) return; e.preventDefault(); ws.keys[b.dataset.k] = true; b.setPointerCapture(e.pointerId); });
-  const up = e => { const b = e.target.closest('button'); if (b) ws.keys[b.dataset.k] = false; };
-  pad.addEventListener('pointerup', up); pad.addEventListener('pointercancel', up); pad.addEventListener('lostpointercapture', up);
-})();
-
-/* ================================================================
-   TABS + MAIN LOOP
-   ================================================================ */
-let tab = 'fractal';
-function setTab(t) {
-  tab = t;
-  document.querySelectorAll('.tabs button').forEach(b => b.setAttribute('aria-selected', String(b.dataset.tab === t)));
-  for (const v of ['fractal', 'hyper', 'world']) $('#view-' + v).hidden = v !== t;
-  if (t === 'fractal') fDraw();
-  if (t === 'world') $('#wc').focus({ preventScroll: true });
-  try { localStorage.setItem('dimensionarium-tab', t); } catch (e) {}
-}
-document.querySelectorAll('.tabs button').forEach(b => b.onclick = () => setTab(b.dataset.tab));
-new ResizeObserver(() => { if (tab === 'fractal') fDraw(); }).observe($('#view-fractal .stage'));
-
-let last = performance.now();
-function frame(now) {
-  const dt = Math.min(0.05, (now - last) / 1000); last = now;
-  if (tab === 'hyper') hDraw(dt);
-  if (tab === 'world') { wUpdate(dt); wDraw(); }
+function frame() {
+  const sp = Math.sin(view.phi);
+  camera.position.set(view.dist * sp * Math.sin(view.theta), view.dist * Math.cos(view.phi), view.dist * sp * Math.cos(view.theta));
+  camera.lookAt(view.target);
+  renderer.render(scene, camera);
   requestAnimationFrame(frame);
 }
 
 function start(data) {
   data = data || {};
-  if (data.fs) Object.assign(fs, data.fs);
-  if (data.hs) { hs.n = data.hs.n; hs.shape = data.hs.shape; $('#hN').value = hs.n; $('#hShape').value = hs.shape; hBuild(); }
-  $('#fType').value = fs.type; $('#fDepth').value = fs.depth; $('#fColor').checked = fs.color;
-  wGen(data.ws ? data.ws.N : 4, data.ws ? data.ws.seed : 1);
-  if (data.ws && data.ws.pos && data.ws.pos.length === ws.N) {
-    ws.pos = data.ws.pos;
-    (data.ws.got || []).forEach(i => { if (ws.gems[i]) { ws.gems[i].got = true; ws.got++; } });
-  }
-  let t = data.tab;
-  if (!t) try { t = localStorage.getItem('dimensionarium-tab'); } catch (e) {}
-  if (location.hash.slice(1) in { fractal: 1, hyper: 1, world: 1 }) t = location.hash.slice(1);
-  fBuild();
-  setTab(t in { fractal: 1, hyper: 1, world: 1 } ? t : 'fractal');
+  if (data.depth != null) { st.depth = data.depth; $('#depth').value = st.depth; $('#depthOut').textContent = st.depth; }
+  if (data.mv) Object.assign(mv, data.mv);
+  resize();
+  setD(data.D != null ? data.D : 1.5);
   requestAnimationFrame(frame);
 }
-window.claude?.hot?.snapshot?.(() => ({
-  tab,
-  fs: { type: fs.type, depth: fs.depth, D: fs.D, seed: fs.seed, color: fs.color },
-  hs: { n: hs.n, shape: hs.shape },
-  ws: { N: ws.N, seed: ws.seed, pos: ws.pos, got: ws.gems.map((g, i) => g.got ? i : -1).filter(i => i >= 0) }
-}));
+window.claude?.hot?.snapshot?.(() => ({ D: st.D, depth: st.depth, mv: { t: mv.t, ang: mv.ang, flip: mv.flip } }));
 window.claude?.hot?.ready ? window.claude.hot.ready(start) : start(window.claude?.hot?.data ?? {});
 })();
 </script>
