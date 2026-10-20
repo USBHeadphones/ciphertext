@@ -148,7 +148,7 @@ a { color: var(--cyan); }
         <p class="dim" id="moveNote"></p>
         <h3 id="tHead">Translate</h3>
         <div class="ctls" id="trans"></div>
-        <h3 id="rHead">Rotate</h3>
+        <h3 id="rHead">Rotate around</h3>
         <div class="ctls" id="rots"></div>
         <div class="rowbtns">
           <button class="btn" id="reset">Reset</button>
@@ -405,17 +405,21 @@ function makeHD(n, base, edgeBase, size) {
   hd = { n, base, points, edges, edgeBase };
 }
 
-/* ---------------- moving the shape: n translations, n(n−1)/2 rotation planes ---------------- */
-const mv = { t: [0, 0, 0, 0, 0, 0], ang: {}, flip: false };
-const planesOf = n => { const p = []; for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) p.push([i, j]); return p; };
+/* ---------------- moving the shape: one slide and one turn per axis ---------------- */
+const mv = { t: [0, 0, 0, 0, 0, 0], rot: [0, 0, 0, 0, 0, 0], flip: false };
+// Turning "around" axis i spins the plane of the next two axes, which leaves axis i fixed.
+// Shapes with up to 3 axes turn in the 3D view, so a flat shape can tilt toward you.
+const space = n => Math.max(n, 3);
+const planeOf = (i, n) => [(i + 1) % space(n), (i + 2) % space(n)];
 function rotation(n) {
-  const R = Array.from({ length: n }, (_, i) => Array.from({ length: n }, (_, j) => +(i === j)));
+  const m = space(n);
+  const R = Array.from({ length: m }, (_, i) => Array.from({ length: m }, (_, j) => +(i === j)));
   if (n === 1 && mv.flip) R[0][0] = -1;
-  for (const [i, j] of planesOf(n)) {
-    const a = mv.ang[i + '-' + j] || 0;
+  for (let ax = 0; ax < n; ax++) {
+    const a = n === 1 ? 0 : mv.rot[ax], [i, j] = planeOf(ax, n);
     if (!a) continue;
     const c = Math.cos(a), s = Math.sin(a);
-    for (let k = 0; k < n; k++) { const x = R[i][k], y = R[j][k]; R[i][k] = c * x - s * y; R[j][k] = s * x + c * y; }
+    for (let k = 0; k < m; k++) { const x = R[i][k], y = R[j][k]; R[i][k] = c * x - s * y; R[j][k] = s * x + c * y; }
   }
   return R;
 }
@@ -437,8 +441,7 @@ function applyMove() {
   if (n === 0) { group.matrix.identity(); return; }
   const R = rotation(n);
   if (n <= 3) {
-    const M = [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
-    for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) M[i][j] = R[i][j];
+    const M = R;
     group.matrix.set(M[0][0], M[0][1], M[0][2], mv.t[0], M[1][0], M[1][1], M[1][2], n > 1 ? mv.t[1] : 0, M[2][0], M[2][1], M[2][2], n > 2 ? mv.t[2] : 0, 0, 0, 0, 1);
     group.matrixWorldNeedsUpdate = true;
     return;
@@ -456,25 +459,23 @@ function applyMove() {
 
 const deg = a => Math.round(a * 180 / Math.PI);
 function buildControls() {
-  const n = st.cls.n, planes = planesOf(n);
-  for (let i = n; i < 6; i++) mv.t[i] = 0;
-  for (const k of Object.keys(mv.ang)) { const [i, j] = k.split('-').map(Number); if (j >= n) delete mv.ang[k]; }
+  const n = st.cls.n;
+  for (let i = n; i < 6; i++) mv.t[i] = mv.rot[i] = 0;
   if (n !== 1) mv.flip = false;
-  $('#moveN').textContent = n === 0 ? 'no axes' : `${n} ${n === 1 ? 'axis' : 'axes'} · ${n === 1 ? '1 flip' : planes.length + (planes.length === 1 ? ' plane' : ' planes')}`;
+  $('#moveN').textContent = n === 0 ? 'no axes' : `${n} ${n === 1 ? 'axis' : 'axes'}`;
   $('#moveNote').textContent = n === 0
     ? 'A point has zero dimensions, so there is no direction to slide in and nothing to turn. Raise D above 0 to get your first axis.'
     : n === 1
       ? 'One axis: slide along x. A rotation needs a plane of two axes, so in 1D the only turn is a flip (a half-turn seen from outside the line).'
-      : `A ${st.D.toFixed(3)}-dimensional shape needs ${n} axes. That gives ${n} directions to slide along and ${planes.length} planes to rotate in, one for every pair of axes.` + (n > 3 ? ` Rotations in planes that use ${AX.slice(3, n).join(' or ')} turn the shape through dimensions the screen can't show, so it seems to turn inside out.` : '');
+      : `A ${st.D.toFixed(3)}-dimensional shape needs ${n} axes, so you can slide along each one and turn around each one. Turning around an axis spins the next two axes and leaves that one fixed` +
+        (n === 2 ? ', so a flat shape tilts out of its plane toward you.' : n === 3 ? '.' : `: around ${AX[n - 2]} spins ${AX[n - 1]} and x. Turns that move ${AX.slice(3, n).join(', ')} pass through dimensions the screen can't show, so the shape seems to turn inside out.`);
   const tag = i => `<b style="background:${AXC[i]}">${AX[i]}</b>`;
   $('#trans').innerHTML = Array.from({ length: n }, (_, i) =>
     `<label class="ctl"><span class="tag">${tag(i)}</span><input type="range" id="t${i}" min="-2" max="2" step="0.01" value="${mv.t[i]}" aria-label="Translate along ${AX[i]}"><output id="to${i}">${mv.t[i].toFixed(2)}</output></label>`).join('');
   $('#rots').innerHTML = n === 1
     ? `<label class="check"><input type="checkbox" id="flip" ${mv.flip ? 'checked' : ''}> Flip x → −x</label>`
-    : planes.map(([i, j]) => {
-      const k = i + '-' + j, a = mv.ang[k] || 0;
-      return `<label class="ctl"><span class="tag">${tag(i)}${tag(j)}</span><input type="range" id="r${k}" data-k="${k}" min="-3.1416" max="3.1416" step="0.01" value="${a}" aria-label="Rotate in the ${AX[i]}${AX[j]} plane"><output id="ro${k}">${deg(a)}°</output></label>`;
-    }).join('');
+    : Array.from({ length: n }, (_, i) =>
+      `<label class="ctl"><span class="tag">${tag(i)}</span><input type="range" id="r${i}" data-i="${i}" min="-3.1416" max="3.1416" step="0.01" value="${mv.rot[i]}" aria-label="Rotate around ${AX[i]}"><output id="ro${i}">${deg(mv.rot[i])}°</output></label>`).join('');
   $('#tHead').hidden = $('#rHead').hidden = n === 0;
   $('#reset').hidden = n === 0;
 }
@@ -483,9 +484,9 @@ $('#trans').addEventListener('input', e => {
 });
 $('#rots').addEventListener('input', e => {
   if (e.target.id === 'flip') { mv.flip = e.target.checked; applyMove(); return; }
-  const k = e.target.dataset.k; mv.ang[k] = +e.target.value; $('#ro' + k).textContent = deg(mv.ang[k]) + '°'; applyMove();
+  const i = +e.target.dataset.i; mv.rot[i] = +e.target.value; $('#ro' + i).textContent = deg(mv.rot[i]) + '°'; applyMove();
 });
-$('#reset').addEventListener('click', () => { mv.t = [0, 0, 0, 0, 0, 0]; mv.ang = {}; mv.flip = false; buildControls(); applyMove(); });
+$('#reset').addEventListener('click', () => { mv.t = [0, 0, 0, 0, 0, 0]; mv.rot = [0, 0, 0, 0, 0, 0]; mv.flip = false; buildControls(); applyMove(); });
 
 /* ---------------- box counting ---------------- */
 function samplePoints(cls, D) {
@@ -730,7 +731,7 @@ function start(data) {
   setD(data.D != null ? data.D : 1.5);
   requestAnimationFrame(frame);
 }
-window.claude?.hot?.snapshot?.(() => ({ D: st.D, depth: st.depth, mv: { t: mv.t, ang: mv.ang, flip: mv.flip } }));
+window.claude?.hot?.snapshot?.(() => ({ D: st.D, depth: st.depth, mv: { t: mv.t, rot: mv.rot, flip: mv.flip } }));
 window.claude?.hot?.ready ? window.claude.hot.ready(start) : start(window.claude?.hot?.data ?? {});
 })();
 </script>
