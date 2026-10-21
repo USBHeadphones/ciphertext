@@ -99,6 +99,14 @@
           <label class="switch"><input type="checkbox" id="turbo"> Turbo mode</label>
           <span class="note">ignores CPS, max speed</span>
         </div>
+        <div class="row"><label for="turboStyle">Turbo style</label>
+          <select id="turboStyle">
+            <option value="full">Full press</option>
+            <option value="click">Click only</option>
+            <option value="native">Native (fastest)</option>
+          </select>
+        </div>
+        <div class="hint">Full press sends down, up and click like a real mouse. Click only skips down/up (~2× faster). Native uses the browser's built-in click (~5× faster), but without cursor coordinates, so canvas games may ignore it.</div>
         <div class="row"><label for="button">Mouse button</label>
           <select id="button"><option value="left">Left</option><option value="right">Right</option><option value="double">Double</option></select>
         </div>
@@ -151,6 +159,7 @@
           <li>Browsers mark these clicks as synthetic (<code>isTrusted = false</code>). Most pages accept them, but some games and anti-bot checks ignore them. Only an OS-level tool (AutoHotkey, xdotool) gets past that.</li>
           <li>Clicks stay inside the page. They can't reach the browser UI, other apps, or cross-origin iframes (ads, embedded players).</li>
           <li>A few sites with strict security policies block bookmarklets.</li>
+          <li>Turbo speed is capped by the page itself: every click runs the site's own click handlers, so heavy sites go slower than the test pad.</li>
           <li>Turbo works in short bursts and yields between them, so your keys and the panic stop keep working at full speed.</li>
         </ul>
       </div>
@@ -198,38 +207,53 @@ function AutoClicker(cfg) {
     return { el: el, x: x, y: y, view: doc.defaultView || w };
   }
 
-  function send(t, type, ctor, btn, buttons) {
-    var C = (ctor === 'p' && t.view.PointerEvent) ? t.view.PointerEvent : t.view.MouseEvent;
-    t.el.dispatchEvent(new C(type, {
+  function make(t, spec) {
+    var C = (spec[1] === 'p' && t.view.PointerEvent) ? t.view.PointerEvent : t.view.MouseEvent;
+    return new C(spec[0], {
       bubbles: true, cancelable: true, composed: true, view: t.view,
       clientX: t.x, clientY: t.y, screenX: t.x + (w.screenX || 0), screenY: t.y + (w.screenY || 0),
-      button: btn, buttons: buttons, detail: 1, pointerId: 1, pointerType: 'mouse', isPrimary: true
-    }));
+      button: spec[2], buttons: spec[3], detail: 1, pointerId: 1, pointerType: 'mouse', isPrimary: true
+    });
   }
 
-  function fire(t) {
+  /*
+   * Build the event list for one target once per tick and re-dispatch the same
+   * objects: allocating events is most of the cost of a synthetic click.
+   * style: 'full' = pointer/mouse down+up+click, 'click' = click event only,
+   * 'native' = element.click() (fastest, but carries no coordinates).
+   */
+  function prepare(t, style) {
     var right = cfg.button === 'right', b = right ? 2 : 0, bs = right ? 2 : 1;
-    var reps = cfg.button === 'double' ? 2 : 1;
-    for (var i = 0; i < reps; i++) {
-      send(t, 'pointerdown', 'p', b, bs);
-      send(t, 'mousedown', 'm', b, bs);
-      send(t, 'pointerup', 'p', b, 0);
-      send(t, 'mouseup', 'm', b, 0);
-      send(t, right ? 'contextmenu' : 'click', 'm', b, 0);
+    var last = right ? 'contextmenu' : 'click', one = [];
+    if (style === 'full') one.push(['pointerdown', 'p', b, bs], ['mousedown', 'm', b, bs], ['pointerup', 'p', b, 0], ['mouseup', 'm', b, 0]);
+    if (style !== 'native' || right) one.push([last, 'm', b, 0]);
+    else one.push(null);
+    var specs = cfg.button === 'double' ? one.concat(one, [['dblclick', 'm', 0, 0]]) : one;
+    return { t: t, specs: specs, evs: specs.map(function (sp) { return sp && make(t, sp); }) };
+  }
+
+  function fire(pk) {
+    var evs = pk.evs, el = pk.t.el;
+    for (var i = 0; i < evs.length; i++) {
+      var e = evs[i];
+      if (!e) { el.click(); continue; }
+      el.dispatchEvent(e);
+      /* a cancelled event stays cancelled on re-dispatch, so swap in a fresh one */
+      if (e.defaultPrevented) evs[i] = make(pk.t, pk.specs[i]);
     }
-    if (reps === 2) send(t, 'dblclick', 'm', 0, 0);
   }
 
   function tick() {
     if (!running) return;
     var now = performance.now(), n = 0, t = resolve(point());
+    var pk = t && prepare(t, st.turbo ? (cfg.turboStyle || 'full') : 'full');
     var room = cfg.limit > 0 ? cfg.limit - st.total : Infinity;
     if (st.turbo) {
-      /* Click flat out for a ~12ms burst, then yield so input events still get through. */
-      var end = now + 12;
-      if (t) {
+      /* Click flat out for a ~16ms burst, then yield so input events still get through. */
+      var end = now + 16;
+      if (pk) {
         do {
-          for (var i = 0; i < 25 && n < room; i++) { fire(t); n++; }
+          for (var i = 0; i < 200 && n < room; i++) { fire(pk); n++; }
         } while (n < room && performance.now() < end);
       }
       st.total += n; record(now, n);
@@ -238,7 +262,7 @@ function AutoClicker(cfg) {
     } else {
       /* Fixed-rate schedule; fires several per tick when the timer can't keep up. */
       var iv = 1000 / Math.max(1, cfg.cps);
-      while (nextAt <= now && n < 1000 && n < room) { if (t) fire(t); n++; nextAt += iv; }
+      while (nextAt <= now && n < 1000 && n < room) { if (pk) fire(pk); n++; nextAt += iv; }
       if (nextAt <= now) nextAt = now + iv;
       if (!t) n = 0;
       st.total += n; record(now, n);
@@ -378,7 +402,7 @@ function AutoClicker(cfg) {
 /* ---------------- page controller ---------------- */
 (function () {
   var $ = function (id) { return document.getElementById(id); };
-  var DEFAULTS = { cps: 20, turbo: false, button: 'left', limit: 0,
+  var DEFAULTS = { cps: 20, turbo: false, turboStyle: 'full', button: 'left', limit: 0,
     toggleKey: 'F6', holdKey: '', turboKey: 'F7', lockKey: 'F8', panicKey: 'Escape' };
   var cfg = Object.assign({}, DEFAULTS);
   try { Object.assign(cfg, JSON.parse(localStorage.getItem('autoclicker.cfg') || '{}')); } catch (e) {}
@@ -414,6 +438,8 @@ function AutoClicker(cfg) {
   $('cpsRange').addEventListener('input', function () { setCps(this.value); });
   $('turbo').checked = cfg.turbo;
   $('turbo').addEventListener('change', function () { apply({ turbo: this.checked }); });
+  $('turboStyle').value = cfg.turboStyle;
+  $('turboStyle').addEventListener('change', function () { apply({ turboStyle: this.value }); });
   $('button').value = cfg.button;
   $('button').addEventListener('change', function () { apply({ button: this.value }); });
   $('limit').value = cfg.limit;
@@ -463,7 +489,7 @@ function AutoClicker(cfg) {
 
   /* bookmarklet */
   function buildBookmarklet() {
-    var c = { cps: cfg.cps, turbo: cfg.turbo, button: cfg.button, limit: cfg.limit, hud: true,
+    var c = { cps: cfg.cps, turbo: cfg.turbo, turboStyle: cfg.turboStyle, button: cfg.button, limit: cfg.limit, hud: true,
       toggleKey: cfg.toggleKey, holdKey: cfg.holdKey, turboKey: cfg.turboKey, lockKey: cfg.lockKey, panicKey: cfg.panicKey };
     var code = '(' + AutoClicker.toString() + ')(' + JSON.stringify(c) + ');void 0';
     $('bm').href = 'javascript:' + encodeURIComponent(code);
@@ -487,7 +513,7 @@ function AutoClicker(cfg) {
   /* test pad: counts the clicks it actually receives */
   var count = 0, peak = 0, fresh = 0, hits = [];
   var pad = $('pad');
-  function hit(e) { e.preventDefault(); count++; fresh++; }
+  function hit() { count++; fresh++; }
   pad.addEventListener('click', hit);
   pad.addEventListener('contextmenu', hit);
   $('resetPad').addEventListener('click', function () { count = 0; peak = 0; fresh = 0; hits = []; });
