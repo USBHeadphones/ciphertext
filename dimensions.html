@@ -120,7 +120,7 @@ a { color: var(--cyan); }
 <div class="app">
   <header class="brand">
     <h1>Dimension<span>arium</span></h1>
-    <p>Pick any Hausdorff dimension from 0 to 6. The shape is computed to have exactly that dimension.</p>
+    <p>Pick any Hausdorff dimension from 0 to 6. One rule, applied in as many dimensions as it needs, builds a shape with exactly that dimension.</p>
   </header>
   <main>
     <div class="stage" id="stage">
@@ -133,13 +133,13 @@ a { color: var(--cyan); }
         <h2>Hausdorff dimension</h2>
         <div class="dial">
           <input type="number" id="Dnum" min="0" max="5.999" step="0.001" value="1.5" aria-label="Dimension, typed">
-          <span id="Dword">curve</span>
+          <span id="Dword">fractal</span>
         </div>
         <input type="range" id="D" min="0" max="5.99" step="0.001" value="1.5" aria-label="Dimension">
         <div class="scale"><span>0</span><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span></div>
         <div class="chips" id="chips"></div>
-        <label class="row">Iterations <output id="depthOut">6</output>
-          <input type="range" id="depth" min="0" max="8" step="1" value="6">
+        <label class="row">Depth limit <output id="depthOut">12</output>
+          <input type="range" id="depth" min="0" max="12" step="1" value="12">
         </label>
       </div>
 
@@ -161,10 +161,10 @@ a { color: var(--cyan); }
         <div class="formula" id="formula"></div>
       </div>
       <div class="card" id="boxCard">
-        <h2>Check by box counting</h2>
+        <h2>Check: count the pieces</h2>
         <div class="big" id="measured"></div>
-        <div class="chart"><canvas id="chart" aria-label="Log-log plot of boxes touched against box size"></canvas></div>
-        <p class="dim">The program scatters points over the shape, covers it with grids of boxes of side ε = 1/2, 1/4, 1/8 and so on, and counts the boxes touched. If N(ε) ∝ ε<sup>−D</sup>, those counts fall on a line of slope D. Only grids coarse enough for the points to fill are used (cyan). For the swept shapes the chart measures the profile curve, then adds the sphere's dimension, which is exact because the sphere is smooth.</p>
+        <div class="chart"><canvas id="chart" aria-label="Log-log plot of pieces needed against box size"></canvas></div>
+        <p class="dim" id="checkText"></p>
         <p class="dim"><a href="https://www.youtube.com/watch?v=gB9n2gHsHN4" target="_blank" rel="noopener">Watch the video on fractal dimension</a></p>
       </div>
     </aside>
@@ -182,89 +182,67 @@ const AXC = ['#ffb84d', '#5fd6e8', '#a98bff', '#ff6f91', '#7ee081', '#f4e36b'];
 const stage = $('#stage');
 if (!window.THREE) { stage.insertAdjacentHTML('beforeend', '<div class="fail">The 3D library did not load. Check your connection and reload the page.</div>'); return; }
 
-function mulberry32(a) {
-  return () => {
-    a |= 0; a = a + 0x6D2B79F5 | 0;
-    let t = Math.imul(a ^ a >>> 15, 1 | a);
-    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
-    return ((t ^ t >>> 14) >>> 0) / 4294967296;
-  };
-}
-function gauss(r) { return Math.sqrt(-2 * Math.log(r() || 1e-12)) * Math.cos(TAU * r()); }
-function sphereDir(m, rand) { // uniform direction on the sphere S^(m-1) in R^m
-  const u = new Array(m); let s = 0;
-  for (let i = 0; i < m; i++) { u[i] = gauss(rand); s += u[i] * u[i]; }
-  s = Math.sqrt(s) || 1; for (let i = 0; i < m; i++) u[i] /= s;
-  return u;
-}
-
 /* ---------------------------------------------------------------
-   The math. Each fractal is self-similar: N copies of itself, each
-   scaled by r. When the copies don't overlap (the open set condition)
-   Moran's theorem gives the Hausdorff dimension exactly:
-       N · r^D = 1   ⟺   D = log N / log(1/r)
-   So to hit a target D we pick N and solve for r.
-
-   0 < D < 1   Cantor set in 1D: 2 copies.
-   1 < D < 2   Koch-type curve in 2D: 4 copies, bump angle solved.
-   n−1 < D < n (n = 3 … 6)   a Koch-type curve of dimension D − (n − 2),
-               swept around the y axis through every direction of the
-               remaining n − 1 axes (a circle in 3D, a 2-sphere in 4D,
-               a 3-sphere in 5D, a 4-sphere in 6D). Sweeping along a smooth m-sphere adds
-               exactly m to the Hausdorff dimension.
-   D = m       a solid m-cube: 2^m copies at scale 1/2.
+   The rule, the same in every dimension n:
+     Take the n-cube. Keep its 2^n corner cubes, each scaled by a,
+     and its center cube, scaled by c = 1 − 2a so that it just touches
+     every corner cube. Repeat inside every kept cube, forever.
+   The pieces never overlap (they meet only at single points), so the
+   open set condition holds and Moran's theorem gives the Hausdorff
+   dimension exactly as the D that solves
+       2^n · a^D + c^D = 1.
+   For a target D we use the fewest axes that can hold it, n = ⌈D⌉,
+   and solve that equation for a. In 1D the center piece would fill
+   the gap, so 1D keeps only the 2 ends (the Cantor set: 2·a^D = 1).
+   A whole number D = n gives a = 1/2, c = 0: the solid n-cube.
    --------------------------------------------------------------- */
-const cantorR = D => Math.pow(2, -1 / D);
-function kochParams(D) {
-  const r = Math.pow(4, -1 / D);
-  // the 4 pieces must still span the unit base: 2r + 2r·cosθ = 1
-  const theta = Math.acos(Math.max(-1, Math.min(1, (1 / r - 2) / 2)));
-  return { r, theta };
+function solveA(n, D) {
+  if (n === 1) return Math.pow(2, -1 / D);
+  const h = a => Math.pow(2, n) * Math.pow(a, D) + Math.pow(1 - 2 * a, D) - 1;
+  // h < 0 just above a = 0 (when D > 1) and h ≥ 0 at a = 1/2 (when D ≤ n): bisect
+  let lo = 1e-300, hi = 0.5;
+  for (let i = 0; i < 1100; i++) { const m = (lo + hi) / 2; if (m === lo || m === hi) break; (h(m) < 0 ? lo = m : hi = m); }
+  return (lo + hi) / 2;
 }
-function kochMaps({ r, theta: t }) {
-  return [
-    [r, 0, 0, 0],
-    [r * Math.cos(t), r * Math.sin(t), r, 0],
-    [r * Math.cos(-t), r * Math.sin(-t), r + r * Math.cos(t), r * Math.sin(t)],
-    [r, 0, 1 - r, 0]
-  ];
-}
-function kochPolyline(p, depth) {
-  let pts = [[0, 0], [1, 0]];
-  const c = Math.cos(p.theta), s = Math.sin(p.theta), r = p.r;
-  for (let d = 0; d < depth; d++) {
-    const out = [pts[0]];
-    for (let i = 0; i < pts.length - 1; i++) {
-      const [ax, ay] = pts[i], [bx, by] = pts[i + 1], vx = (bx - ax) * r, vy = (by - ay) * r;
-      const p1 = [ax + vx, ay + vy];
-      const p2 = [p1[0] + c * vx - s * vy, p1[1] + s * vx + c * vy];
-      out.push(p1, p2, [bx - vx, by - vy], pts[i + 1]);
-    }
-    pts = out;
-  }
-  return pts;
-}
-function kochPoints(p, n, rand) {
-  const maps = kochMaps(p), out = new Float64Array(n * 2);
-  let x = 0, y = 0;
-  for (let i = 0; i < n + 40; i++) {
-    const [a, b, tx, ty] = maps[(rand() * 4) | 0];
-    const nx = a * x - b * y + tx; y = b * x + a * y + ty; x = nx;
-    if (i >= 40) { out[(i - 40) * 2] = x; out[(i - 40) * 2 + 1] = y; }
-  }
-  return out;
-}
-// Profile of the swept shapes: Koch point (x, y) → radius from the axis and height along it
-const prof = (x, y) => [0.55 + y * 2, (x - 0.5) * 2.6];
-
-function classify(D) {
+function shapeFor(D) {
   if (D <= 0) return { mode: 'point', n: 0 };
   const m = Math.round(D);
-  if (Math.abs(D - m) < 1e-9) return { mode: 'cube', n: m };
-  const n = Math.ceil(D);
-  if (n === 1) return { mode: 'cantor', n };
-  if (n === 2) return { mode: 'koch', n, f: D };
-  return { mode: 'spun', n, f: D - (n - 2) };
+  if (Math.abs(D - m) < 1e-9) return { mode: 'cube', n: m, a: 0.5, c: 0 };
+  const n = Math.ceil(D), a = solveA(n, D);
+  return { mode: n === 1 ? 'cantor' : 'fractal', n, a, c: n === 1 ? 0 : 1 - 2 * a };
+}
+const residual = (g, D) => g.mode === 'point' ? 0 : (g.n === 1 ? 2 : 2 ** g.n) * Math.pow(g.a, D) + (g.c > 0 ? Math.pow(g.c, D) : 0) - 1;
+
+// Pieces: the largest are refined first until the drawing budget is used up.
+const BUDGET = [0, 0, 40000, 60000, 0, 0, 0];
+function pieces(g, maxDepth) {
+  const n = g.n, N = 1 << n, kids = [];
+  for (let m = 0; m < N; m++) { const o = new Float64Array(n); for (let i = 0; i < n; i++) o[i] = (m >> i & 1) ? 1 - g.a : 0; kids.push({ o, s: g.a }); }
+  if (g.c > 0) kids.push({ o: new Float64Array(n).fill(g.a), s: g.c });
+  const root = [{ o: new Float64Array(n), s: 1, d: 0 }];
+  if (g.mode === 'cube') return root;
+  const refine = tau => {
+    const out = [], stack = [root[0]];
+    while (stack.length) {
+      const p = stack.pop();
+      if (p.s <= tau || p.d >= maxDepth) { out.push(p); if (out.length > BUDGET[n]) return null; continue; }
+      if (out.length + stack.length + kids.length > BUDGET[n] * 1.5) return null;
+      for (const k of kids) {
+        const o = new Float64Array(n);
+        for (let i = 0; i < n; i++) o[i] = p.o[i] + p.s * k.o[i];
+        stack.push({ o, s: p.s * k.s, d: p.d + 1 });
+      }
+    }
+    return out;
+  };
+  let best = root;
+  for (let tau = 0.999; tau > 1e-12; tau *= 0.85) {
+    const L = refine(tau);
+    if (!L) break;
+    best = L;
+    if (L.every(p => p.d >= maxDepth)) break;
+  }
+  return best;
 }
 
 /* ---------------- three.js scene ---------------- */
@@ -273,19 +251,19 @@ renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
 stage.prepend(renderer.domElement);
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(40, 1, 0.01, 200);
-scene.add(new THREE.AmbientLight(0xb8b0ff, 0.45));
-const key = new THREE.DirectionalLight(0xffe2b8, 0.9); key.position.set(3, 4, 5); scene.add(key);
-const rim = new THREE.DirectionalLight(0x5fd6e8, 0.55); rim.position.set(-4, -1, -3); scene.add(rim);
+scene.add(new THREE.AmbientLight(0xb8b0ff, 0.5));
+const key = new THREE.DirectionalLight(0xffe2b8, 0.85); key.position.set(3, 4, 5); scene.add(key);
+const rim = new THREE.DirectionalLight(0x5fd6e8, 0.5); rim.position.set(-4, -1, -3); scene.add(rim);
 const axesGroup = new THREE.Group(); scene.add(axesGroup);
 let group = new THREE.Group(); group.matrixAutoUpdate = false; scene.add(group);
 const view = { theta: 0, phi: Math.PI / 2, dist: 4, target: new THREE.Vector3(), drag: null };
+const SIZE = 2.4; // the unit n-cube is drawn 2.4 units wide, centered on the origin
 
 const C1 = new THREE.Color('#5fd6e8'), C2 = new THREE.Color('#a98bff'), C3 = new THREE.Color('#ffb84d');
 function ramp(t, out) { // cyan → violet → amber
   t = Math.max(0, Math.min(1, t));
   return t < 0.5 ? out.copy(C1).lerp(C2, t * 2) : out.copy(C2).lerp(C3, t * 2 - 1);
 }
-
 function clearGroup() {
   group.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); });
   scene.remove(group); group = new THREE.Group(); group.matrixAutoUpdate = false; scene.add(group);
@@ -295,114 +273,102 @@ function drawAxes(n) {
   axesGroup.clear();
   for (let i = 0; i < Math.min(n, 3); i++) {
     const a = new THREE.Vector3(), b = new THREE.Vector3();
-    a.setComponent(i, -2.4); b.setComponent(i, 2.4);
-    const g = new THREE.BufferGeometry().setFromPoints([a, b]);
-    const l = new THREE.Line(g, new THREE.LineDashedMaterial({ color: AXC[i], dashSize: 0.05, gapSize: 0.07, transparent: true, opacity: 0.45 }));
+    a.setComponent(i, -2.6); b.setComponent(i, 2.6);
+    const l = new THREE.Line(new THREE.BufferGeometry().setFromPoints([a, b]), new THREE.LineDashedMaterial({ color: AXC[i], dashSize: 0.05, gapSize: 0.07, transparent: true, opacity: 0.45 }));
     l.computeLineDistances(); axesGroup.add(l);
   }
 }
 
-// High-dimensional shapes keep their n-D coordinates; every change re-projects them to 3D.
-let hd = null; // { n, base: Float32Array (count·n), points, edges?, edgeBase? }
+let hd = null; // shapes with 4+ axes keep their n-D vertices and get re-projected on every move
+let drawn = { count: 0, smallest: 1 };
 
 function buildPoint() {
   group.add(new THREE.Mesh(new THREE.SphereGeometry(0.06, 24, 16), new THREE.MeshBasicMaterial({ color: 0xffb84d })));
 }
-function buildCantor(D, depth) {
-  const r = cantorR(D), W = 3, levels = depth + 1, gap = 0.22, thick = 0.07;
+function buildCantor(g, depth) {
+  const levels = Math.min(depth, 11) + 1, gap = 0.22, thick = 0.07;
   let segs = [[0, 1]], all = [];
   for (let l = 0; l < levels; l++) {
     all.push(...segs.map(s => [s[0], s[1], l]));
-    if (l < levels - 1) segs = segs.flatMap(([a, b]) => { const L = b - a; return [[a, a + L * r], [b - L * r, b]]; });
+    if (l < levels - 1) segs = segs.flatMap(([x0, x1]) => { const L = x1 - x0; return [[x0, x0 + L * g.a], [x1 - L * g.a, x1]]; });
   }
   const mesh = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshStandardMaterial({ roughness: 0.5, metalness: 0.1 }), all.length);
   const m = new THREE.Matrix4(), col = new THREE.Color();
-  all.forEach(([a, b, l], i) => {
-    m.makeScale(Math.max(0.004, (b - a) * W), thick, thick);
+  all.forEach(([x0, x1, l], i) => {
+    m.makeScale(Math.max(0.003, (x1 - x0) * SIZE), thick, thick);
     // the finished set sits on the x axis; faint rows above it show the construction steps
-    m.setPosition(((a + b) / 2 - 0.5) * W, (levels - 1 - l) * gap, 0);
+    m.setPosition(((x0 + x1) / 2 - 0.5) * SIZE, (levels - 1 - l) * gap, 0);
     mesh.setMatrixAt(i, m);
-    ramp((a + b) / 2, col);
-    if (l < levels - 1) col.multiplyScalar(0.45);
+    ramp((x0 + x1) / 2, col); if (l < levels - 1) col.multiplyScalar(0.4);
     mesh.setColorAt(i, col);
   });
   group.add(mesh);
+  drawn = { count: segs.length, smallest: segs[0][1] - segs[0][0] };
 }
-function buildKoch(D, depth) {
-  const pts = kochPolyline(kochParams(D), Math.min(depth, 8));
-  const S = 3, n = pts.length, pos = new Float32Array(n * 3), cols = new Float32Array(n * 3), c = new THREE.Color();
-  let ymax = 0; for (const q of pts) ymax = Math.max(ymax, q[1]);
-  pts.forEach(([x, y], i) => { pos.set([(x - 0.5) * S, (y - ymax / 2) * S, 0], i * 3); ramp(i / (n - 1), c); cols.set([c.r, c.g, c.b], i * 3); });
-  const g = new THREE.BufferGeometry();
-  g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-  g.setAttribute('color', new THREE.BufferAttribute(cols, 3));
-  group.add(new THREE.Line(g, new THREE.LineBasicMaterial({ vertexColors: true })));
+function buildSolid(g, depth) { // 2D squares or 3D cubes, one instance per piece
+  const n = g.n, P = pieces(g, depth), col = new THREE.Color(), m = new THREE.Matrix4();
+  const mat = n === 2 ? new THREE.MeshBasicMaterial() : new THREE.MeshStandardMaterial({ roughness: 0.55, metalness: 0.05 });
+  const mesh = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), mat, P.length);
+  let smallest = 1;
+  P.forEach((p, i) => {
+    const s = p.s * SIZE, ctr = [0, 0, 0];
+    for (let k = 0; k < n; k++) ctr[k] = (p.o[k] + p.s / 2 - 0.5) * SIZE;
+    m.makeScale(s, s, n === 2 ? 0.02 : s); m.setPosition(ctr[0], ctr[1], ctr[2]);
+    mesh.setMatrixAt(i, m);
+    let t = 0; for (let k = 0; k < n; k++) t += p.o[k] + p.s / 2; ramp(t / n, col);
+    mesh.setColorAt(i, col);
+    smallest = Math.min(smallest, p.s);
+  });
+  group.add(mesh);
+  if (n === 3 && g.mode === 'cube') group.add(new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(SIZE, SIZE, SIZE)), new THREE.LineBasicMaterial({ color: 0xffb84d })));
+  drawn = { count: P.length, smallest };
 }
-function buildLathe(f, depth) {
-  const P = kochPolyline(kochParams(f), Math.min(depth, 6)).map(([x, y]) => prof(x, y));
-  const phiStart = 0.6, phiLen = TAU * 0.82;
-  const geo = new THREE.LatheGeometry(P.map(([r, h]) => new THREE.Vector2(r, h)), 180, phiStart, phiLen);
-  const uv = geo.attributes.uv, cols = new Float32Array(uv.count * 3), c = new THREE.Color();
-  for (let i = 0; i < uv.count; i++) { ramp(uv.getY(i), c); cols.set([c.r, c.g, c.b], i * 3); }
-  geo.setAttribute('color', new THREE.BufferAttribute(cols, 3));
-  group.add(new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.42, metalness: 0.15, side: THREE.DoubleSide })));
-  for (const phi of [phiStart, phiStart + phiLen]) {
-    const pos = new Float32Array(P.length * 3);
-    P.forEach(([r, h], i) => pos.set([Math.sin(phi) * r * 1.002, h, Math.cos(phi) * r * 1.002], i * 3));
-    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-    group.add(new THREE.Line(g, new THREE.LineBasicMaterial({ color: 0xffffff })));
+// Every piece at one uniform depth, as flat arrays of corners and sizes.
+function level(g, L) {
+  const n = g.n, N = (1 << n) + (g.c > 0 ? 1 : 0);
+  let o = new Float64Array(n), s = new Float64Array([1]);
+  for (let d = 0; d < L; d++) {
+    const cnt = s.length, no = new Float64Array(cnt * N * n), ns = new Float64Array(cnt * N);
+    for (let p = 0; p < cnt; p++) for (let m = 0; m < N; m++) {
+      const q = p * N + m, center = m === (1 << n), sz = s[p];
+      ns[q] = sz * (center ? g.c : g.a);
+      for (let i = 0; i < n; i++) no[q * n + i] = o[p * n + i] + sz * (center ? g.a : ((m >> i & 1) ? 1 - g.a : 0));
+    }
+    o = no; s = ns;
   }
+  return { o, s };
 }
-function buildCube(m) {
-  if (m === 1) { buildKoch(1, 0); return; }
-  if (m === 2) {
-    const g = new THREE.PlaneGeometry(2, 2);
-    group.add(new THREE.Mesh(g, new THREE.MeshStandardMaterial({ color: 0xa98bff, roughness: 0.5, side: THREE.DoubleSide })));
-    group.add(new THREE.LineSegments(new THREE.EdgesGeometry(g), new THREE.LineBasicMaterial({ color: 0xffb84d })));
-    return;
+// 4D–6D: faint wireframes of the first-level hypercubes for structure,
+// plus one dot per piece several levels deeper, where the fractal detail lives.
+const DOTS = 300000;
+function buildWire(g, depth) {
+  const n = g.n, V = 1 << n, N = V + (g.c > 0 ? 1 : 0);
+  const wl = g.mode === 'cube' ? 0 : Math.min(1, depth), W = level(g, wl), wc = W.s.length;
+  const wbase = new Float32Array(wc * V * n), edges = [];
+  for (let j = 0; j < wc; j++) {
+    for (let v = 0; v < V; v++) for (let i = 0; i < n; i++) wbase[(j * V + v) * n + i] = (W.o[j * n + i] + ((v >> i & 1) ? W.s[j] : 0) - 0.5) * SIZE;
+    for (let v = 0; v < V; v++) for (let i = 0; i < n; i++) if (!(v >> i & 1)) edges.push(j * V + v, j * V + (v | 1 << i));
   }
-  if (m === 3) {
-    const g = new THREE.BoxGeometry(2, 2, 2);
-    group.add(new THREE.Mesh(g, new THREE.MeshStandardMaterial({ color: 0xa98bff, roughness: 0.45, transparent: true, opacity: 0.85 })));
-    group.add(new THREE.LineSegments(new THREE.EdgesGeometry(g), new THREE.LineBasicMaterial({ color: 0xffb84d })));
-    return;
+  const lgeo = new THREE.BufferGeometry();
+  lgeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(wc * V * 3), 3));
+  lgeo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(wc * V * 3), 3));
+  lgeo.setIndex(edges);
+  group.add(new THREE.LineSegments(lgeo, new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: g.mode === 'cube' ? 0.95 : [0, 0, 0, 0, 0.3, 0.18, 0.1][n], depthWrite: false, blending: THREE.AdditiveBlending })));
+  const layers = [{ base: wbase, geo: lgeo }];
+  let count = wc, smallest = Math.min(...W.s);
+  if (g.mode !== 'cube') {
+    const L = Math.max(1, Math.min(depth, Math.floor(Math.log(DOTS) / Math.log(N)))), P = level(g, L), pc = P.s.length;
+    const pbase = new Float32Array(pc * n);
+    for (let j = 0; j < pc; j++) for (let i = 0; i < n; i++) pbase[j * n + i] = (P.o[j * n + i] + P.s[j] / 2 - 0.5) * SIZE;
+    const pgeo = new THREE.BufferGeometry();
+    pgeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(pc * 3), 3));
+    pgeo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(pc * 3), 3));
+    group.add(new THREE.Points(pgeo, new THREE.PointsMaterial({ size: [0, 0, 0, 0, 0.03, 0.034, 0.026][n], vertexColors: true, transparent: true, opacity: 0.8, depthWrite: false })));
+    layers.push({ base: pbase, geo: pgeo });
+    count = pc; smallest = 1; for (let j = 0; j < pc; j++) if (P.s[j] < smallest) smallest = P.s[j];
   }
-  // m ≥ 4: a solid hypercube as a point cloud plus its edges
-  const rand = mulberry32(5), count = 60000, base = new Float32Array(count * m);
-  for (let i = 0; i < base.length; i++) base[i] = rand() * 2 - 1;
-  const verts = [];
-  for (let k = 0; k < (1 << m); k++) for (let i = 0; i < m; i++) if (!(k >> i & 1)) verts.push(k, k | 1 << i);
-  const edgeBase = new Float32Array(verts.length * m);
-  verts.forEach((k, j) => { for (let i = 0; i < m; i++) edgeBase[j * m + i] = (k >> i & 1) ? 1 : -1; });
-  makeHD(m, base, edgeBase, 0.016);
-}
-function buildSwept(n, f) {
-  // a Koch curve of dimension f, swept through the (n−2)-sphere around the y axis
-  const rand = mulberry32(11), count = n === 4 ? 90000 : 110000;
-  const k = kochPoints(kochParams(f), count, rand), base = new Float32Array(count * n);
-  for (let i = 0; i < count; i++) {
-    const [r, h] = prof(k[i * 2], k[i * 2 + 1]), u = sphereDir(n - 1, rand);
-    const o = i * n;
-    base[o] = r * u[0]; base[o + 1] = h;
-    for (let j = 2; j < n; j++) base[o + j] = r * u[j - 1];
-  }
-  makeHD(n, base, null, 0.014);
-}
-function makeHD(n, base, edgeBase, size) {
-  const count = base.length / n;
-  const g = new THREE.BufferGeometry();
-  g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(count * 3), 3));
-  g.setAttribute('color', new THREE.BufferAttribute(new Float32Array(count * 3), 3));
-  const points = new THREE.Points(g, new THREE.PointsMaterial({ size, vertexColors: true, transparent: true, opacity: 0.85, depthWrite: false, blending: THREE.AdditiveBlending }));
-  group.add(points);
-  let edges = null;
-  if (edgeBase) {
-    const eg = new THREE.BufferGeometry();
-    eg.setAttribute('position', new THREE.BufferAttribute(new Float32Array(edgeBase.length / n * 3), 3));
-    edges = new THREE.LineSegments(eg, new THREE.LineBasicMaterial({ color: 0xffb84d, transparent: true, opacity: 0.8 }));
-    group.add(edges);
-  }
-  hd = { n, base, points, edges, edgeBase };
+  hd = { n, layers };
+  drawn = { count, smallest };
 }
 
 /* ---------------- moving the shape: one slide and one turn per axis ---------------- */
@@ -423,43 +389,37 @@ function rotation(n) {
   }
   return R;
 }
-const CAM4 = 4.5;
-function projectInto(n, R, src, dst, col) {
-  const q = new Float64Array(n), c = new THREE.Color(), cnt = src.length / n;
+const CAM4 = 8;
+function applyMove() {
+  const n = st.g.n;
+  if (n === 0) { group.matrix.identity(); group.matrixWorldNeedsUpdate = true; return; }
+  const R = rotation(n);
+  if (n <= 3) {
+    group.matrix.set(R[0][0], R[0][1], R[0][2], mv.t[0], R[1][0], R[1][1], R[1][2], n > 1 ? mv.t[1] : 0, R[2][0], R[2][1], R[2][2], n > 2 ? mv.t[2] : 0, 0, 0, 0, 1);
+    group.matrixWorldNeedsUpdate = true;
+    return;
+  }
+  group.matrix.identity(); group.matrixWorldNeedsUpdate = true;
+  for (const { base, geo } of hd.layers) project(n, R, base, geo);
+}
+function project(n, R, src, geo) {
+  const dst = geo.attributes.position.array, col = geo.attributes.color.array;
+  const cnt = src.length / n, q = new Float64Array(n), c = new THREE.Color();
   for (let p = 0; p < cnt; p++) {
     const o = p * n;
     for (let i = 0; i < n; i++) { let s = mv.t[i]; const Ri = R[i]; for (let k = 0; k < n; k++) s += Ri[k] * src[o + k]; q[i] = s; }
     const w = q[3];
     // remove each extra axis with a perspective divide, like a camera looking down that axis
-    for (let k = n - 1; k >= 3; k--) { const f = CAM4 / (CAM4 - q[k]); for (let i = 0; i < k; i++) q[i] *= f; }
+    for (let k = n - 1; k >= 3; k--) { const f = CAM4 / (CAM4 - Math.min(q[k], CAM4 - 0.5)); for (let i = 0; i < k; i++) q[i] *= f; }
     dst[p * 3] = q[0]; dst[p * 3 + 1] = q[1]; dst[p * 3 + 2] = q[2];
-    if (col) { ramp((w + 1.6) / 3.2, c); col[p * 3] = c.r; col[p * 3 + 1] = c.g; col[p * 3 + 2] = c.b; }
+    ramp((w + 1.4) / 2.8, c); col[p * 3] = c.r; col[p * 3 + 1] = c.g; col[p * 3 + 2] = c.b;
   }
-}
-function applyMove() {
-  const n = st.cls.n;
-  if (n === 0) { group.matrix.identity(); return; }
-  const R = rotation(n);
-  if (n <= 3) {
-    const M = R;
-    group.matrix.set(M[0][0], M[0][1], M[0][2], mv.t[0], M[1][0], M[1][1], M[1][2], n > 1 ? mv.t[1] : 0, M[2][0], M[2][1], M[2][2], n > 2 ? mv.t[2] : 0, 0, 0, 0, 1);
-    group.matrixWorldNeedsUpdate = true;
-    return;
-  }
-  group.matrix.identity(); group.matrixWorldNeedsUpdate = true;
-  const pg = hd.points.geometry;
-  projectInto(n, R, hd.base, pg.attributes.position.array, pg.attributes.color.array);
-  pg.attributes.position.needsUpdate = true; pg.attributes.color.needsUpdate = true; pg.computeBoundingSphere();
-  if (hd.edges) {
-    const eg = hd.edges.geometry;
-    projectInto(n, R, hd.edgeBase, eg.attributes.position.array, null);
-    eg.attributes.position.needsUpdate = true; eg.computeBoundingSphere();
-  }
+  geo.attributes.position.needsUpdate = true; geo.attributes.color.needsUpdate = true; geo.computeBoundingSphere();
 }
 
 const deg = a => Math.round(a * 180 / Math.PI);
 function buildControls() {
-  const n = st.cls.n;
+  const n = st.g.n;
   for (let i = n; i < 6; i++) mv.t[i] = mv.rot[i] = 0;
   if (n !== 1) mv.flip = false;
   $('#moveN').textContent = n === 0 ? 'no axes' : `${n} ${n === 1 ? 'axis' : 'axes'}`;
@@ -488,108 +448,54 @@ $('#rots').addEventListener('input', e => {
 });
 $('#reset').addEventListener('click', () => { mv.t = [0, 0, 0, 0, 0, 0]; mv.rot = [0, 0, 0, 0, 0, 0]; mv.flip = false; buildControls(); applyMove(); });
 
-/* ---------------- box counting ---------------- */
-function samplePoints(cls, D) {
-  const rand = mulberry32(2024), { mode, n } = cls;
-  if (mode === 'cantor') {
-    const r = cantorR(D), N = 200000, out = new Float64Array(N);
-    let x = 0;
-    for (let i = 0; i < N + 40; i++) { x = rand() < 0.5 ? r * x : r * x + 1 - r; if (i >= 40) out[i - 40] = x; }
-    return { dim: 1, pts: out };
+/* ---------------- the check: count the pieces needed to cover the shape ----------------
+   Cover the shape with pieces of size about ε: follow each branch of the construction
+   until its piece first shrinks to ε or less. A piece reached by i corner steps and
+   j center steps has size a^i·c^j, and there are C(i+j, i)·(2^n)^i of them, so the count
+   N(ε) is exact and cheap even for ε = 2^-2000. Each such piece fits in a few boxes of
+   side ε and each box meets a bounded number of pieces, so N(ε) grows like box counts,
+   and the slope of log N(ε) against log(1/ε) is the dimension. */
+const LF = new Float64Array(80001); for (let m = 1; m < LF.length; m++) LF[m] = LF[m - 1] + Math.log2(m);
+const lbinom = (p, q) => LF[p + q] - LF[p] - LF[q];
+function log2Cover(g, k) {
+  const n = g.n, la = Math.log2(g.a), lc = g.c > 0 ? Math.log2(g.c) : null, t = [];
+  for (let j = 0; ; j++) {
+    const sj = j ? j * lc : 0;
+    if (j > 0 && (j - 1) * lc <= -k) break;
+    const i = Math.max(0, Math.ceil((-k - sj) / la - 1e-12));
+    if (i + j >= LF.length) return NaN;
+    if (i > 0 && (i - 1) * la + sj > -k) t.push(lbinom(i - 1, j) + i * n);
+    if (j > 0 && i * la + (j - 1) * lc > -k) t.push(lbinom(i, j - 1) + i * n);
+    if (lc === null) break;
   }
-  if (mode === 'koch') return { dim: 2, pts: kochPoints(kochParams(D), 600000, rand) };
-  if (mode === 'cube') { const out = new Float64Array(500000 * n); for (let i = 0; i < out.length; i++) out[i] = rand() * 2 - 1; return { dim: n, pts: out }; }
-  // swept shapes: the sphere factor is smooth and contributes exactly n − 2, so only the
-  // profile curve needs measuring (sampled points can't resolve its roughness after sweeping)
-  return { dim: 2, pts: kochPoints(kochParams(cls.f), 600000, rand), add: n - 2 };
+  let mx = -Infinity; for (const v of t) if (v > mx) mx = v;
+  let s = 0; for (const v of t) s += 2 ** (v - mx);
+  return mx + Math.log2(s);
 }
-function boxCount({ dim, pts }) {
-  const N = pts.length / dim, lo = Array(dim).fill(Infinity), hi = Array(dim).fill(-Infinity);
-  for (let i = 0; i < N; i++) for (let d = 0; d < dim; d++) { const v = pts[i * dim + d]; if (v < lo[d]) lo[d] = v; if (v > hi[d]) hi[d] = v; }
-  const L = Math.max(...hi.map((h, d) => h - lo[d])) * 1.000001 || 1;
-  const K = [0, 20, 11, 8, 6, 5, 4][dim], rows = [];
-  for (let k = 1; k <= K; k++) {
-    const g = 1 << k, cells = g ** dim;
-    const grid = cells <= (1 << 24) ? new Uint8Array(cells) : null, seen = grid ? null : new Set();
-    let count = 0;
-    for (let i = 0; i < N; i++) {
-      let id = 0;
-      for (let d = 0; d < dim; d++) id = id * g + Math.min(g - 1, ((pts[i * dim + d] - lo[d]) / L * g) | 0);
-      if (grid) { if (!grid[id]) { grid[id] = 1; count++; } } else if (!seen.has(id)) { seen.add(id); count++; }
-    }
-    rows.push({ k, count });
-    if (count > N / 3) break; // finer grids would only count individual points
-  }
-  // use grids that the sample fills densely: on average at least 12 points per touched box
-  let fit = rows.filter(r => r.k >= 2 && r.count <= N / 12);
-  if (fit.length < 3) fit = rows.filter(r => r.count <= N / 12).slice(-3);
-  if (fit.length < 2) fit = rows.slice(0, 2);
-  fit.forEach(r => { r.used = true; });
-  const mx = fit.reduce((a, r) => a + r.k, 0) / fit.length, my = fit.reduce((a, r) => a + Math.log2(r.count), 0) / fit.length;
-  let sxy = 0, sxx = 0;
-  for (const r of fit) { sxy += (r.k - mx) * (Math.log2(r.count) - my); sxx += (r.k - mx) ** 2; }
-  const slope = sxy / sxx;
-  return { rows, K: rows.length, slope, icpt: my - slope * mx };
-}
-
-/* ---------------- panel text ---------------- */
-const st = { D: 1.5, depth: 6, cls: null, box: null, hover: -1 };
-const fmt = (v, n = 4) => v.toFixed(n);
-const degs = t => (t * 180 / Math.PI).toFixed(2) + '°';
-const SPH = ['', '', '', 'a circle', 'a 2-sphere', 'a 3-sphere', 'a 4-sphere'];
-
-function explain() {
-  const D = st.D, { mode, n, f } = st.cls;
-  let word, how, fm;
-  const osc = '<br><span class="step">the copies never overlap (open set condition), so by Moran\'s theorem this is the exact Hausdorff dimension</span>';
-  if (mode === 'point') {
-    word = 'point';
-    how = 'A single point. Scale it by any factor and you still have 1 copy, so N = 1 and D = 0.';
-    fm = `N · r<sup>D</sup> = 1 with N = 1 &nbsp;⟹&nbsp; D = <em>0</em>`;
-  } else if (mode === 'cube') {
-    word = ['', 'line segment', 'square', 'cube', 'tesseract', 'penteract', 'hexeract'][n];
-    how = `A whole number. A solid ${word} splits into 2${sup(n)} = ${2 ** n} copies of itself at half size.`;
-    fm = `N = 2<sup>${n}</sup> = <em>${2 ** n}</em>, r = 1/2<br>D = log ${2 ** n} / log 2 = <em>${n}</em>` + osc;
-  } else if (mode === 'cantor') {
-    const r = cantorR(D);
-    word = 'dust';
-    how = 'Less than a line: a Cantor set. Start with a segment and keep 2 shrunken copies at its ends, forever. The shrink factor r is solved so the dimension is exactly D. The faint rows above it show the first few cuts.';
-    fm = `<span class="step">2 copies, each scaled by r</span><br>2 · r<sup>D</sup> = 1 &nbsp;⟹&nbsp; r = 2<sup>−1/D</sup> = <em>${fmt(r, 5)}</em><br>` +
-      `<span class="step">check</span> log 2 / log(1/r) = <em>${fmt(Math.log(2) / Math.log(1 / r))}</em>` + osc;
-  } else if (mode === 'koch') {
-    const { r, theta } = kochParams(D);
-    word = 'curve';
-    how = 'Between a line and a surface: a Koch-type curve. Each segment becomes 4 pieces scaled by r with a bump in the middle. The dimension fixes r, and the bump angle θ is whatever keeps the 4 pieces reaching end to end.';
-    fm = `<span class="step">4 copies, each scaled by r</span><br>4 · r<sup>D</sup> = 1 &nbsp;⟹&nbsp; r = 4<sup>−1/D</sup> = <em>${fmt(r, 5)}</em><br>` +
-      `<span class="step">pieces must span the base</span><br>2r + 2r·cos θ = 1 &nbsp;⟹&nbsp; θ = <em>${degs(theta)}</em><br>` +
-      `<span class="step">check</span> log 4 / log(1/r) = <em>${fmt(Math.log(4) / Math.log(1 / r))}</em>` + osc;
-  } else {
-    const { r, theta } = kochParams(f), m = n - 2;
-    word = n === 3 ? 'rough surface' : `rough ${n - 1}D hypersurface`;
-    how = n === 3
-      ? `Between a surface and a solid. A Koch-type curve of dimension ${fmt(f, 3)} (white edge) is swept around the y axis through a full circle. Sweeping along a smooth circle adds exactly 1.`
-      : `This lives in ${n}D. A Koch-type curve of dimension ${fmt(f, 3)} is swept around the y axis through every direction in the other ${n - 1} axes, which traces out ${SPH[n]}. A smooth ${m}-sphere adds exactly ${m}. The screen shows a perspective projection, colored by the w coordinate.`;
-    fm = `<span class="step">profile curve, dimension D − ${m}</span><br>4 · r<sup>${fmt(f, 3)}</sup> = 1 &nbsp;⟹&nbsp; r = <em>${fmt(r, 5)}</em>, θ = <em>${degs(theta)}</em><br>` +
-      `<span class="step">sweep it along ${SPH[n]} (dimension ${m})</span><br>dim(K × S<sup>${m}</sup>) = dim K + ${m} = ${fmt(f)} + ${m} = <em>${fmt(D)}</em>` + osc;
-  }
-  $('#Dword').textContent = word;
-  $('#how').textContent = how;
-  $('#formula').innerHTML = fm;
-  const detail = mode === 'cantor' ? ` · ${st.depth} cuts, ${2 ** st.depth} pieces` : mode === 'koch' ? ` · ${(4 ** Math.min(st.depth, 8)).toLocaleString()} segments` : '';
-  $('#overlay').innerHTML = `<b>D = ${fmt(D)}</b> · ${word} · lives in ${n}D${n > 3 ? ', projected to 3D' : ''}${detail}`;
-  $('#legend').hidden = n < 4;
-}
-
 function measure() {
-  const cls = st.cls;
-  $('#boxCard').hidden = cls.mode === 'point';
-  if (cls.mode === 'point') return;
-  const sample = samplePoints(cls, st.D);
-  st.box = boxCount(sample);
-  const add = sample.add || 0;
-  $('#measured').innerHTML = add
-    ? `${(st.box.slope + add).toFixed(3)}<small>profile ${st.box.slope.toFixed(3)} + sphere ${add}, target ${st.D.toFixed(3)}</small>`
-    : `${st.box.slope.toFixed(3)}<small>measured, target ${st.D.toFixed(3)}</small>`;
+  const g = st.g;
+  $('#boxCard').hidden = g.mode === 'point';
+  if (g.mode === 'point') return;
+  const lc = g.c > 0 ? -Math.log2(g.c) : Infinity;
+  // the center chain shrinks slowly when c is near 1, so cap the work there
+  const k1 = Math.floor(Math.min(2000, 20000 * lc)), k0 = Math.max(1, Math.ceil(k1 / 10));
+  const res = residual(g, st.D);
+  if (k1 < 30) {
+    st.box = null;
+    $('#measured').innerHTML = `${st.D.toFixed(3)}<small>by the equation only</small>`;
+    $('#checkText').textContent = `At this dimension the corner pieces are ${g.a.toExponential(1)} of their parent, so the construction only shows its true dimension at scales far below anything countable here. The equation itself still balances: 2${sup(g.n)}·a^D + c^D − 1 = ${res.toExponential(1)}.`;
+    drawChart();
+    return;
+  }
+  const step = Math.max(1, Math.floor((k1 - k0) / 240)), rows = [];
+  for (let k = k0; k <= k1; k += step) { const y = log2Cover(g, k); if (!isFinite(y)) break; rows.push({ k, y }); }
+  const mx = rows.reduce((s, r) => s + r.k, 0) / rows.length, my = rows.reduce((s, r) => s + r.y, 0) / rows.length;
+  let sxy = 0, sxx = 0; for (const r of rows) { sxy += (r.k - mx) * (r.y - my); sxx += (r.k - mx) ** 2; }
+  const slope = sxy / sxx;
+  st.box = { rows, slope, icpt: my - slope * mx };
+  $('#measured').innerHTML = `${slope.toFixed(5)}<small>target ${st.D.toFixed(5)}</small>`;
+  $('#checkText').innerHTML = `Pieces needed to cover the shape with boxes from 2<sup>−${rows[0].k}</sup> down to 2<sup>−${rows[rows.length - 1].k}</sup> wide, counted exactly from the construction. The slope of that line is the dimension. ` +
+    `Equation check: ${g.n === 1 ? '2' : '2' + sup(g.n)}·a<sup>D</sup>${g.c > 0 ? ' + c<sup>D</sup>' : ''} − 1 = ${res === 0 ? '0' : res.toExponential(1)}.`;
   drawChart();
 }
 
@@ -599,70 +505,114 @@ function prep(c) {
   const ctx = c.getContext('2d'); ctx.setTransform(d, 0, 0, d, 0, 0);
   c._w = r.width; c._h = r.height; return ctx;
 }
-function sup(n) { return String(n).split('').map(d => '⁰¹²³⁴⁵⁶⁷⁸⁹'[d]).join(''); }
+function sup(n) { return String(n).split('').map(d => d === '-' ? '⁻' : '⁰¹²³⁴⁵⁶⁷⁸⁹'[d]).join(''); }
+function niceStep(range, target) { const raw = range / target, p = 10 ** Math.floor(Math.log10(raw)); return [1, 2, 5, 10].map(m => m * p).find(s => s >= raw); }
 function drawChart() {
-  const B = st.box; if (!B || $('#boxCard').hidden) return;
   const c = $('#chart'), ctx = prep(c), w = c._w, h = c._h;
-  const css = getComputedStyle(document.documentElement), tok = n => css.getPropertyValue(n).trim();
-  const L = 34, R = 26, T = 12, Bm = 26, K = Math.max(2, B.K);
-  const ys = B.rows.map(r => Math.log2(r.count)), y1 = Math.max(4, Math.ceil(Math.max(...ys)));
-  const X = k => L + (k - 1) / (K - 1) * (w - L - R), Y = v => h - Bm - v / y1 * (h - T - Bm);
   ctx.clearRect(0, 0, w, h);
+  c.parentElement.hidden = !st.box;
+  const B = st.box; if (!B || $('#boxCard').hidden) return;
+  const css = getComputedStyle(document.documentElement), tok = n => css.getPropertyValue(n).trim();
+  const L = 46, R = 14, T = 14, Bm = 28;
+  const k0 = B.rows[0].k, k1 = B.rows[B.rows.length - 1].k;
+  const y0 = Math.min(...B.rows.map(r => r.y)), y1 = Math.max(...B.rows.map(r => r.y));
+  const X = k => L + (k - k0) / Math.max(1, k1 - k0) * (w - L - R), Y = v => h - Bm - (v - y0) / Math.max(1e-9, y1 - y0) * (h - T - Bm);
   ctx.font = '10px ' + tok('--mono'); ctx.lineWidth = 1; ctx.strokeStyle = tok('--line'); ctx.fillStyle = tok('--muted');
   ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
-  const step = y1 > 12 ? 4 : 2;
-  for (let v = 0; v <= y1; v += step) { ctx.beginPath(); ctx.moveTo(L, Y(v)); ctx.lineTo(w - R, Y(v)); ctx.stroke(); ctx.fillText('2' + sup(v), L - 5, Y(v)); }
+  const ys = niceStep(y1 - y0, 4);
+  for (let v = Math.ceil(y0 / ys) * ys; v <= y1; v += ys) { ctx.beginPath(); ctx.moveTo(L, Y(v)); ctx.lineTo(w - R, Y(v)); ctx.stroke(); ctx.fillText('2' + sup(Math.round(v)), L - 5, Y(v)); }
   ctx.textAlign = 'center'; ctx.textBaseline = 'top';
-  const every = K > 9 ? 2 : 1;
-  for (let k = 1; k <= K; k += every) ctx.fillText('1/' + (1 << k), X(k), h - Bm + 5);
-  ctx.textAlign = 'left'; ctx.fillText('boxes touched', L + 4, T - 8);
+  const xs = niceStep(k1 - k0, 4);
+  for (let k = Math.ceil(k0 / xs) * xs; k <= k1; k += xs) ctx.fillText('2' + sup(-k), X(k), h - Bm + 5);
+  ctx.textAlign = 'left'; ctx.fillText('pieces N(ε)', L + 4, 2);
   ctx.textAlign = 'right'; ctx.textBaseline = 'bottom'; ctx.fillText('box size ε', w - R, h - Bm - 3);
-  const used = B.rows.filter(r => r.used), k0 = used[0].k - 0.4, k1 = used[used.length - 1].k + 0.4;
-  const fy = k => B.slope * k + B.icpt;
   ctx.strokeStyle = tok('--amber'); ctx.lineWidth = 2;
-  ctx.beginPath(); ctx.moveTo(X(k0), Y(fy(k0))); ctx.lineTo(X(k1), Y(fy(k1))); ctx.stroke();
-  B.rows.forEach((r, i) => {
-    ctx.beginPath(); ctx.arc(X(r.k), Y(ys[i]), i === st.hover ? 6 : 4, 0, TAU);
-    ctx.fillStyle = r.used ? tok('--cyan') : tok('--muted'); ctx.fill();
-    ctx.lineWidth = 2; ctx.strokeStyle = tok('--panel'); ctx.stroke();
-  });
-  const lk = (k0 + k1) / 2;
-  ctx.fillStyle = tok('--ink'); ctx.textAlign = 'left'; ctx.textBaseline = 'bottom';
-  ctx.fillText(`slope ${B.slope.toFixed(3)}`, Math.min(w - R - 70, X(lk) + 8), Y(fy(lk)) - 6);
+  ctx.beginPath(); ctx.moveTo(X(k0), Y(B.slope * k0 + B.icpt)); ctx.lineTo(X(k1), Y(B.slope * k1 + B.icpt)); ctx.stroke();
+  ctx.fillStyle = tok('--cyan');
+  const every = Math.max(1, Math.floor(B.rows.length / 24));
+  B.rows.forEach((r, i) => { if (i % every) return; ctx.beginPath(); ctx.arc(X(r.k), Y(r.y), i === st.hover ? 5 : 3, 0, TAU); ctx.fill(); });
+  ctx.fillStyle = tok('--ink'); ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+  ctx.fillText(`slope ${B.slope.toFixed(5)}`, L + 8, T + 8);
   if (st.hover >= 0) {
-    const r = B.rows[st.hover], txt = `ε = 1/${1 << r.k} · ${r.count.toLocaleString()} boxes`;
-    const tw = ctx.measureText(txt).width + 12, px = Math.min(w - tw - 4, Math.max(4, X(r.k) - tw / 2)), py = Math.max(2, Y(ys[st.hover]) - 28);
+    const r = B.rows[st.hover], txt = `ε = 2${sup(-r.k)} · N ≈ 2${sup(Math.round(r.y))}`;
+    const tw = ctx.measureText(txt).width + 12, px = Math.min(w - tw - 4, Math.max(4, X(r.k) - tw / 2)), py = Math.max(2, Y(r.y) - 28);
     ctx.fillStyle = tok('--raise'); ctx.strokeStyle = tok('--line'); ctx.lineWidth = 1;
     ctx.beginPath(); ctx.roundRect(px, py, tw, 18, 4); ctx.fill(); ctx.stroke();
     ctx.fillStyle = tok('--ink'); ctx.textBaseline = 'middle'; ctx.fillText(txt, px + 6, py + 9);
   }
-  c._X = X; c._Y = Y; c._ys = ys;
+  c._X = X; c._Y = Y;
+}
+
+/* ---------------- panel text ---------------- */
+const st = { D: 1.5, depth: 12, g: null, box: null, hover: -1 };
+const fmt = (v, n = 4) => v.toFixed(n);
+const NAMES = ['point', 'line segment', 'square', 'cube', 'tesseract', 'penteract', 'hexeract'];
+function explain() {
+  const D = st.D, g = st.g, n = g.n;
+  let word, how, fm;
+  if (g.mode === 'point') {
+    word = 'point';
+    how = 'A single point. Scale it by any factor and you still have 1 copy, so the equation N·r^D = 1 has N = 1 and D = 0.';
+    fm = `N = 1 &nbsp;⟹&nbsp; D = <em>0</em>`;
+  } else if (g.mode === 'cube') {
+    word = NAMES[n];
+    how = `A whole number. The rule's corner cubes grow to half size (a = 1/2), the center cube shrinks to nothing, and the ${2 ** n} corners fill the solid ${word} exactly.`;
+    fm = `2${sup(n)} · (1/2)<sup>D</sup> = 1 &nbsp;⟹&nbsp; D = <em>${n}</em>`;
+  } else if (g.mode === 'cantor') {
+    word = 'dust';
+    how = 'Less than a line, so it fits on 1 axis. Keep the 2 end pieces of the segment, each scaled by a, and repeat inside each forever. (In 1D a center piece would close the gap, so there is none.) The faint rows above show the first cuts.';
+    fm = `<span class="step">2 end pieces, each scaled by a</span><br>2 · a<sup>D</sup> = 1 &nbsp;⟹&nbsp; a = 2<sup>−1/D</sup> = <em>${fmt(g.a, 6)}</em>`;
+  } else {
+    word = n === 2 ? 'fractal in the plane' : n === 3 ? 'fractal in space' : `${n}D fractal`;
+    how = `${D.toFixed(3)} is more than ${n - 1}, so the shape needs ${n} axes. In the ${n}-cube keep the ${2 ** n} corner cubes, scaled by a, plus the center cube, scaled by c = 1 − 2a so it touches every corner. Repeat inside every kept cube.` +
+      (n >= 4 ? ' The view shows the first-level hypercubes as faint wireframes and every piece a few levels deeper as a dot, projected through each extra axis and colored by its w coordinate.' : '');
+    fm = `<span class="step">${2 ** n} corners at scale a, 1 center at scale c = 1 − 2a</span><br>` +
+      `2${sup(n)}·a<sup>D</sup> + (1 − 2a)<sup>D</sup> = 1<br>` +
+      `<span class="step">solved by bisection</span><br>a = <em>${fmt(g.a, 6)}</em>, c = <em>${fmt(g.c, 6)}</em>`;
+  }
+  if (g.mode !== 'point') fm += '<br><span class="step">the pieces meet only at single points, so by Moran\'s theorem this D is the exact Hausdorff dimension</span>';
+  $('#Dword').textContent = word;
+  $('#how').textContent = how;
+  $('#formula').innerHTML = fm;
+  const detail = g.mode === 'point' ? '' : ` · ${drawn.count.toLocaleString()} pieces drawn, smallest ${drawn.smallest >= 0.01 ? (drawn.smallest * 100).toFixed(1) + '%' : drawn.smallest.toExponential(1)} of the width`;
+  $('#overlay').innerHTML = `<b>D = ${fmt(D)}</b> · ${word} · ${n} ${n === 1 ? 'axis' : 'axes'}${n > 3 ? ', projected to 3D' : ''}${detail}`;
+  $('#legend').hidden = n < 4;
 }
 
 /* ---------------- rebuild on change ---------------- */
 function rebuild(remeasure = true) {
-  const prev = st.cls, cls = classify(st.D);
-  st.cls = cls;
-  clearGroup(); hd = null;
-  if (cls.mode === 'point') buildPoint();
-  else if (cls.mode === 'cube') buildCube(cls.n);
-  else if (cls.mode === 'cantor') buildCantor(st.D, st.depth);
-  else if (cls.mode === 'koch') buildKoch(st.D, st.depth);
-  else if (cls.n === 3) buildLathe(cls.f, st.depth);
-  else buildSwept(cls.n, cls.f);
-  if (!prev || prev.n !== cls.n) {
-    view.theta = cls.n >= 3 ? 0.55 : 0;
-    view.phi = cls.n >= 3 ? 1.15 : Math.PI / 2;
-    view.dist = [3, 5.4, 5.2, 6.4, 6.6, 6.6, 6.6][cls.n];
-    drawAxes(cls.n);
+  const prev = st.g;
+  st.g = shapeFor(st.D);
+  const g = st.g;
+  clearGroup(); hd = null; drawn = { count: 1, smallest: 1 };
+  if (g.mode === 'point') buildPoint();
+  else if (g.n === 1) buildCantor(g, st.depth);
+  else if (g.n <= 3) buildSolid(g, st.depth);
+  else buildWire(g, st.depth);
+  if (!prev || prev.n !== g.n) {
+    view.theta = g.n >= 3 ? 0.6 : 0;
+    view.phi = g.n >= 3 ? 1.12 : Math.PI / 2;
+    drawAxes(g.n);
     buildControls();
   }
   applyMove();
-  $('#depth').closest('label').hidden = !(cls.mode === 'cantor' || cls.mode === 'koch' || (cls.mode === 'spun' && cls.n === 3));
+  if (!prev || prev.n !== g.n) view.dist = fitDistance();
+  $('#depth').closest('label').hidden = g.mode === 'point' || g.mode === 'cube';
   explain();
-  if (remeasure) { clearTimeout(rebuild.t); rebuild.t = setTimeout(measure, 200); }
+  if (remeasure) { clearTimeout(rebuild.t); rebuild.t = setTimeout(measure, 150); }
 }
-
+// Back the camera off far enough to frame the whole projected shape.
+function fitDistance() {
+  let r = 0.4;
+  group.traverse(o => {
+    if (!o.geometry) return;
+    if (!o.geometry.boundingSphere) o.geometry.computeBoundingSphere();
+    r = Math.max(r, o.geometry.boundingSphere.center.length() + o.geometry.boundingSphere.radius);
+  });
+  // instanced pieces report the unit box, so use the known extent for 1–3 axes
+  if (st.g.n <= 3) r = Math.max(r, st.g.n === 1 ? 2.1 : SIZE * Math.sqrt(st.g.n) / 2);
+  return Math.min(30, r / Math.sin(camera.fov * Math.PI / 360) / Math.min(1, camera.aspect) * 1.08);
+}
 function setD(v, from) {
   v = Math.max(0, Math.min(5.999, +v || 0));
   st.D = v;
@@ -677,21 +627,21 @@ $('#depth').addEventListener('input', e => { st.depth = +e.target.value; $('#dep
 
 const CHIPS = [
   ['Cantor set', Math.log(2) / Math.log(3)],
-  ['Britain’s coast', 1.25],
   ['Koch snowflake', Math.log(4) / Math.log(3)],
+  ['Vicsek fractal', Math.log(5) / Math.log(3)],
   ['Sierpinski triangle', Math.log(3) / Math.log(2)],
   ['Menger sponge', Math.log(20) / Math.log(3)],
   ['Tesseract', 4]
 ];
-$('#chips').innerHTML = CHIPS.map(([n, v], i) => `<button data-i="${i}" title="Set D to ${v.toFixed(4)}">${n}<b>${+v.toFixed(3)}</b></button>`).join('');
+$('#chips').innerHTML = CHIPS.map(([n, v], i) => `<button data-i="${i}" title="Set D to ${v.toFixed(4)}, the dimension of the ${n}">${n}<b>${+v.toFixed(3)}</b></button>`).join('');
 $('#chips').addEventListener('click', e => { const b = e.target.closest('button'); if (b) setD(CHIPS[+b.dataset.i][1]); });
 
 const chart = $('#chart');
 chart.addEventListener('pointermove', e => {
   if (!chart._X || !st.box) return;
   const r = chart.getBoundingClientRect(), mx = e.clientX - r.left, my = e.clientY - r.top;
-  let best = -1, bd = 22;
-  st.box.rows.forEach((row, i) => { const d = Math.hypot(chart._X(row.k) - mx, chart._Y(chart._ys[i]) - my); if (d < bd) { bd = d; best = i; } });
+  let best = -1, bd = 18;
+  st.box.rows.forEach((row, i) => { const d = Math.hypot(chart._X(row.k) - mx, chart._Y(row.y) - my); if (d < bd) { bd = d; best = i; } });
   if (best !== st.hover) { st.hover = best; drawChart(); }
 });
 chart.addEventListener('pointerleave', () => { st.hover = -1; drawChart(); });
@@ -726,7 +676,7 @@ function frame() {
 function start(data) {
   data = data || {};
   if (data.depth != null) { st.depth = data.depth; $('#depth').value = st.depth; $('#depthOut').textContent = st.depth; }
-  if (data.mv) Object.assign(mv, data.mv);
+  if (data.mv) { mv.t = data.mv.t || mv.t; mv.rot = data.mv.rot || mv.rot; mv.flip = !!data.mv.flip; }
   resize();
   setD(data.D != null ? data.D : 1.5);
   requestAnimationFrame(frame);
