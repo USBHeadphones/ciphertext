@@ -1,0 +1,1247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>The Fifth Corner</title>
+<style>
+  :root{ --ink:#ece9f7; --dim:#77739a; --hot:#ffd79a; --cy:#8fd9ff; --gr:#9ae6b8; --rd:#ff9e9e; }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{height:100%;overflow:hidden;background:#04040a}
+  body{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;color:var(--ink);-webkit-font-smoothing:antialiased}
+  canvas{display:block;position:fixed;inset:0;cursor:crosshair}
+  .hud{position:fixed;pointer-events:none;z-index:10;font-size:11px;line-height:1.55;letter-spacing:.03em}
+  #tl{top:14px;left:16px}
+  #tl .big{font-size:15px;letter-spacing:.24em}
+  #tl .geo{color:var(--dim);font-size:10px;letter-spacing:.12em;margin-top:2px}
+  #tl .geo b{color:var(--hot);font-weight:400}
+  #bl{bottom:12px;left:16px;color:var(--dim);font-size:10px}
+  #obj{position:fixed;top:14px;left:50%;transform:translateX(-50%);z-index:12;text-align:center;
+       pointer-events:none;max-width:560px;padding:0 14px}
+  #obj .act{font-size:9px;letter-spacing:.34em;color:var(--dim)}
+  #obj .task{font-size:12px;letter-spacing:.05em;color:var(--hot);margin-top:3px;line-height:1.5}
+  #log{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:30;width:min(620px,92vw);
+       padding:24px 28px;pointer-events:none;opacity:0;transition:opacity .4s;
+       background:rgba(6,5,14,.95);border:1px solid #2b2746;border-radius:3px}
+  #log.show{opacity:1}
+  #log .who{font-size:9px;letter-spacing:.3em;color:var(--cy);margin-bottom:10px}
+  #log .txt{font-size:12.5px;line-height:1.9;color:#cfcbe6}
+  #log .txt em{color:var(--hot);font-style:normal}
+  #log .dismiss{margin-top:14px;font-size:9.5px;letter-spacing:.2em;color:var(--dim)}
+  #banner{position:fixed;left:0;right:0;top:30%;z-index:20;text-align:center;pointer-events:none;opacity:0;transition:opacity .35s}
+  #banner.show{opacity:1}
+  #banner .t{font-size:13px;letter-spacing:.3em;color:var(--hot)}
+  #banner .s{font-size:10.5px;letter-spacing:.1em;color:#a9a5cf;margin-top:6px}
+  .ov{position:fixed;inset:0;z-index:40;display:flex;align-items:center;justify-content:center;
+      background:radial-gradient(ellipse at 50% 45%,rgba(11,9,24,.92),rgba(3,3,8,.98));padding:16px;cursor:pointer}
+  .card{max-width:640px;padding:0 20px}
+  .card h1{font-size:27px;letter-spacing:.27em;font-weight:500;margin-bottom:5px}
+  .card h2{font-size:10px;letter-spacing:.3em;color:var(--dim);font-weight:400;margin-bottom:20px}
+  .card p{font-size:12.5px;line-height:1.9;color:#bcb8d6;margin-bottom:11px}
+  .card em{color:var(--hot);font-style:normal}
+  .card table{font-size:12px;color:#cfcbe6;border-collapse:collapse;margin:6px 0 14px}
+  .card td{padding:3px 14px 3px 0}
+  .card .ctl{margin-top:16px;font-size:10.5px;color:var(--dim);line-height:2}
+  .card .go{margin-top:18px;font-size:11px;letter-spacing:.26em;color:var(--cy);animation:bl 1.9s infinite}
+  @keyframes bl{0%,100%{opacity:1}50%{opacity:.3}}
+  kbd{display:inline-block;border:1px solid #38344f;border-bottom-width:2px;border-radius:3px;padding:1px 5px;
+      color:#cfcae8;font-size:10px;font-family:inherit;min-width:17px;text-align:center}
+  .hidden{display:none!important}
+  #hint{position:fixed;left:50%;transform:translateX(-50%);bottom:132px;z-index:15;pointer-events:none;
+        font-size:10px;letter-spacing:.22em;color:rgba(143,217,255,.6)}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<div class="hud" id="tl">
+  <div class="big" id="wName">THE ATRIUM</div>
+  <div class="geo" id="wGeo"></div>
+</div>
+<div id="obj"><div class="act" id="oAct"></div><div class="task" id="oTask"></div></div>
+<div class="hud" id="bl">
+  <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> move · <kbd>⇧</kbd> run · mouse to look · <kbd>space</kbd> drop a mark<br>
+  <kbd>E</kbd> use · <kbd>M</kbd> map size · <kbd>R</kbd> restart this space · <kbd>esc</kbd> release mouse
+</div>
+<div id="hint" class="hidden">CLICK TO CAPTURE THE MOUSE · OR DRAG TO LOOK</div>
+<div id="log"><div class="who" id="lWho"></div><div class="txt" id="lTxt"></div><div class="dismiss">PRESS ANY KEY</div></div>
+<div id="banner"><div class="t" id="bT"></div><div class="s" id="bS"></div></div>
+
+<div class="ov" id="intro">
+  <div class="card">
+    <h1>THE FIFTH CORNER</h1>
+    <h2>THREE SPACES · ONE GYROSCOPE</h2>
+    <p>You carry a gyroscope. It never turns unless you do: it is carried straight, which
+       geometers call <em>parallel transport</em>. In flat space that makes it a perfect compass.
+       In curved space it is not. Walk a loop and it comes back turned, by exactly the
+       <em>area</em> the loop went around.</p>
+    <p>The doors in these spaces are gyro locks. Stand in front of one: if the needle points
+       through it, it opens. Getting the needle to point the right way means walking the right loop.</p>
+    <div class="ctl">
+      <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> move · <kbd>⇧</kbd> run · mouse to look ·
+      <kbd>space</kbd> drop a mark · <kbd>E</kbd> use · <kbd>M</kbd> map
+    </div>
+    <div class="go">CLICK TO ENTER</div>
+  </div>
+</div>
+
+<div class="ov hidden" id="fin">
+  <div class="card">
+    <h1 style="color:var(--hot);font-size:23px">THE CORE</h1>
+    <h2>THREE SPACES, ONE GYROSCOPE</h2>
+    <p>The same instrument, carried around a loop in each space:</p>
+    <table id="finT"></table>
+    <p>Flat space never turns it. Hyperbolic space turns it one way and spherical space the other,
+       in each case by the area the loop went around. Curvature is not something you see. It is
+       something you carry home and find has turned.</p>
+    <div class="go">PRESS <kbd>R</kbd> TO START AGAIN</div>
+  </div>
+</div>
+
+<script>
+"use strict";
+/* ═══════════════════════════════════════════════════════════════════════════
+   THE FIFTH CORNER
+
+   Three worlds built from regular tilings {p,q} of the three constant-curvature
+   planes, each crossed with a vertical Euclidean line (X × E):
+     ATRIUM   K = 0   {4,4} squares,   4 × 90°  = 360°  (flat)
+     ARCHIVE  K = −1  {5,4} pentagons, 5 × 90°  = 450°  (hyperbolic)
+     HOLLOW   K = +1  {5,3} pentagons, 5 × 120° = 600°  (spherical, 12 rooms)
+
+   One code path serves all three. Points live in R³ with the bilinear form
+   ⟨a,b⟩ = K·a₀b₀ + a₁b₁ + a₂b₂: the hyperboloid ⟨p,p⟩ = −1, the sphere
+   ⟨p,p⟩ = 1, or the flat plane p₀ = 1. With C = cos_K(s), S = sin_K(s),
+   walking distance s along f is the exact isometry
+       p' = p·C + f·S,     f' = −K·p·S + f·C,
+   which parallel-transports the player's frame for free.
+
+   THE GYROSCOPE is an angle γ measured from the player's heading. Walking
+   transports the whole frame, so γ only changes when the player turns. Its
+   world direction, G = cos γ·f + sin γ·r, therefore drifts relative to the
+   rooms exactly by the holonomy of the path: zero in the Atrium, minus the
+   enclosed area in the Archive, plus the enclosed area in the Hollow.
+
+   A GYRO LOCK opens when G points through the door: the door's normal,
+   parallel-transported from the doorway to the player, must lie within
+   LOCK_TOL of G. Turning on the spot rotates both together, so only loops
+   can change the alignment.
+   ═══════════════════════════════════════════════════════════════════════════ */
+const TAU=Math.PI*2, PI=Math.PI;
+const clamp=(v,a,b)=>v<a?a:v>b?b:v;
+const lerp=(a,b,t)=>a+(b-a)*t;
+const wrap=a=>{a=(a+PI)%TAU;if(a<0)a+=TAU;return a-PI;};
+const DEG=180/PI;
+
+const R=7, EYE=1.62, CEIL_H=4.6, DOOR_W=3.0, DOOR_H=3.0;   // metres
+const FOV=1.60;
+const WALK=4.4, RUN=8.2, TURN=1.9;
+const PORTAL_DEPTH=8, MIN_PORTAL=150;
+const LOCK_TOL=14/DEG, LOCK_REACH=2.4;                      // radians, metres
+const MARK_REACH=0.22;                                      // curvature units
+
+/* ── curvature-generic geometry ───────────────────────────────────────── */
+let K=0;
+const Ck=s=>K<0?Math.cosh(s):K>0?Math.cos(s):1;
+const Sk=s=>K<0?Math.sinh(s):K>0?Math.sin(s):s;
+const dotk=(a,b)=>K*a[0]*b[0]+a[1]*b[1]+a[2]*b[2];
+function dist(a,b){
+  if(K===0) return Math.hypot(a[1]-b[1],a[2]-b[2]);
+  const c=dotk(a,b)/K;
+  return K<0?Math.acosh(c>1?c:1):Math.acos(clamp(c,-1,1));
+}
+let _ux=0,_uy=0,_uz=0,_ud=0;
+/* unit tangent at A toward B, and the distance, left in _u*, _ud */
+function tangent(A,B){
+  if(K===0){
+    const dx=B[1]-A[1],dy=B[2]-A[2]; _ud=Math.hypot(dx,dy);
+    if(!(_ud>1e-12)){_ux=_uy=_uz=0;return false;}
+    _ux=0;_uy=dx/_ud;_uz=dy/_ud;return true;
+  }
+  const cd=dotk(A,B)/K;
+  _ud=K<0?Math.acosh(cd>1?cd:1):Math.acos(clamp(cd,-1,1));
+  const s=Sk(_ud);
+  if(!(Math.abs(s)>1e-12)){_ux=_uy=_uz=0;return false;}
+  _ux=(B[0]-cd*A[0])/s;_uy=(B[1]-cd*A[1])/s;_uz=(B[2]-cd*A[2])/s;
+  return true;
+}
+function geoPt(A,t){const c=Ck(t),s=Sk(t);return [A[0]*c+_ux*s,A[1]*c+_uy*s,A[2]*c+_uz*s];}
+/* Parallel transport of tangent vector e from A to B along their geodesic. */
+function transport(e,A,B){
+  if(K===0) return e.slice();
+  const den=K+dotk(A,B), k=dotk(B,e)/den;
+  return [e[0]-k*(A[0]+B[0]),e[1]-k*(A[1]+B[1]),e[2]-k*(A[2]+B[2])];
+}
+
+function mul(X,Y){const Z=new Array(9);
+  for(let i=0;i<3;i++)for(let j=0;j<3;j++){let s=0;for(let k=0;k<3;k++)s+=X[i*3+k]*Y[k*3+j];Z[i*3+j]=s;}
+  return Z;}
+const mul3=(a,b,c)=>mul(mul(a,b),c);
+const app=(M,v)=>[M[0]*v[0]+M[1]*v[1]+M[2]*v[2],M[3]*v[0]+M[4]*v[1]+M[5]*v[2],M[6]*v[0]+M[7]*v[1]+M[8]*v[2]];
+const IDM=[1,0,0,0,1,0,0,0,1];
+const rotM=a=>[1,0,0, 0,Math.cos(a),-Math.sin(a), 0,Math.sin(a),Math.cos(a)];
+const trM=d=>[Ck(d),-K*Sk(d),0, Sk(d),Ck(d),0, 0,0,1];
+const FLIPM=[1,0,0, 0,-1,0, 0,0,1];
+const ORIGIN=[1,0,0];
+function lorentzInv(M){const J=[-1,1,1],Z=new Array(9);
+  for(let i=0;i<3;i++)for(let j=0;j<3;j++)Z[i*3+j]=J[i]*M[j*3+i]*J[j];return Z;}
+
+/* ── the tiling ───────────────────────────────────────────────────────── */
+let Pp=4, INR=0, CIRC=0, EDGE=0, AREA=0, PHI0=0, REFL=[];
+const thE=j=>PHI0+TAU*j/Pp;            // direction of edge j's midpoint from the centre
+const thV=j=>thE(j)-PI/Pp;             // direction of vertex j (edge j runs vertex j → j+1)
+function setupGeometry(k,p,q,phi0,flatInr){
+  K=k;Pp=p;PHI0=phi0;
+  const a=PI/p,b=PI/q;
+  if(k===0){INR=flatInr;CIRC=INR/Math.cos(a);EDGE=2*INR*Math.tan(a);AREA=0;}
+  else{
+    const ac=k<0?Math.acosh:Math.acos;
+    INR=ac(Math.cos(b)/Math.sin(a));
+    CIRC=ac(1/(Math.tan(a)*Math.tan(b)));
+    EDGE=2*ac(Math.cos(a)/Math.sin(b));
+    AREA=Math.abs((p-2)*PI-p*TAU/q);   // Gauss–Bonnet: |angle defect| = area
+  }
+  REFL=[];
+  for(let j=0;j<p;j++) REFL.push(mul3(rotM(thE(j)),mul3(trM(INR),FLIPM,trM(-INR)),rotM(-thE(j))));
+}
+
+let cells=[], cellKey=new Map();
+function cellVerts(M){const V=[];for(let v=0;v<Pp;v++)V.push(app(mul(M,mul(rotM(thV(v)),trM(CIRC))),ORIGIN));return V;}
+function newCell(M){
+  const c=app(M,ORIGIN), id=cells.length;
+  cells.push({M,c,V:cellVerts(M),id,nbr:new Array(Pp).fill(-1),be:new Array(Pp).fill(-1),wall:new Array(Pp).fill(true),
+              lock:new Array(Pp).fill(false),unl:new Array(Pp).fill(false),seen:false,kind:''});
+  keyPut(c,id);
+  return id;
+}
+/* Hyperbolic cells are hashed by Poincaré coordinates and every hit is checked by
+   real distance; far cells are excluded because ⟨x,y⟩ between a far and a near
+   point cancels catastrophically. The finite worlds just search linearly. */
+const KEYQ=200000, KEY_MAX=2e5;
+const kxy=c=>[Math.round(c[1]/(1+c[0])*KEYQ),Math.round(c[2]/(1+c[0])*KEYQ)];
+function keyPut(c,id){
+  if(K>=0||c[0]>KEY_MAX) return;
+  const [a,b]=kxy(c),k=a+','+b;let arr=cellKey.get(k);if(!arr){arr=[];cellKey.set(k,arr);}arr.push(id);
+}
+function findCell(c){
+  if(K>=0){for(const cl of cells) if(dist(cl.c,c)<0.05) return cl.id; return -1;}
+  if(c[0]>KEY_MAX) return -1;
+  const [kx,ky]=kxy(c);
+  for(let a=-1;a<=1;a++)for(let b=-1;b<=1;b++){
+    const arr=cellKey.get((kx+a)+','+(ky+b)); if(!arr) continue;
+    for(const id of arr){const q=cells[id].c;
+      if(q[0]>c[0]*3+8||c[0]>q[0]*3+8) continue;
+      if(dist(q,c)<0.05) return id;}
+  }
+  return -1;
+}
+let _sd=1;
+const rnd=()=>{_sd^=_sd<<13;_sd^=_sd>>>17;_sd^=_sd<<5;return (_sd>>>0)/4294967296;};
+const reseed=v=>{_sd=v>>>0||1;};
+
+/* Crossing edge j is reflection j. A room created that way shares its own edge j
+   with the room it came from. A room that already existed may label the shared
+   edge differently: in the Hollow the corners are 120°, not π/m, so the pentagon
+   is not a Coxeter cell and labels depend on the route taken. So every door
+   stores the index it has on the far side (be[j]) instead of assuming j.
+   -2 marks "no room there" (outside the Atrium). */
+let allowCell=c=>true, newDoorP=0;
+function edgeMid(cl,j){tangent(cl.V[j],cl.V[(j+1)%Pp]);return geoPt(cl.V[j],_ud*0.5);}
+function setEdge(i,j,prop,val){const A=cells[i];A[prop][j]=val;const n=A.nbr[j];if(n>=0)cells[n][prop][A.be[j]]=val;}
+function ensureNbr(i,j){
+  const A=cells[i];
+  if(A.nbr[j]!==-1) return A.nbr[j];
+  const M2=mul(A.M,REFL[j]), c2=app(M2,ORIGIN);
+  let n=findCell(c2), k=j, fresh=false;
+  if(n<0){
+    if(!allowCell(c2)){A.nbr[j]=-2;return -2;}
+    n=newCell(M2); fresh=true;
+  } else {
+    const m=edgeMid(A,j); let bd=1e9;
+    for(let e=0;e<Pp;e++){const d=dist(edgeMid(cells[n],e),m);if(d<bd){bd=d;k=e;}}
+  }
+  A.nbr[j]=n; A.be[j]=k; cells[n].nbr[k]=i; cells[n].be[k]=j;
+  if(world==='archive') setEdge(i,j,'wall',fresh?false:!(rnd()<newDoorP));   // the way in is always open
+  return n;
+}
+function expandAround(ci,radius){
+  if(world!=='archive') return;
+  const seen=new Set([ci]);let q=[ci],guard=0;
+  while(q.length&&guard++<400){
+    const nq=[];
+    for(const i of q){
+      if(dist(P.p,cells[i].c)>radius) continue;
+      for(let j=0;j<Pp;j++){const n=ensureNbr(i,j);if(n>=0&&!seen.has(n)){seen.add(n);nq.push(n);}}
+    }
+    q=nq; if(cells.length>40000) break;
+  }
+}
+function edgeTo(a,b){const A=cells[a];for(let j=0;j<Pp;j++)if(A.nbr[j]===b)return j;return -1;}
+function setDoor(a,b,open,lock){
+  const j=edgeTo(a,b); if(j<0) return -1;
+  setEdge(a,j,'wall',!open); setEdge(a,j,'lock',!!lock); setEdge(a,j,'unl',false);
+  return j;
+}
+
+/* ── the player ───────────────────────────────────────────────────────── */
+let P={p:[1,0,0],f:[0,1,0],r:[0,0,1]}, pitch=0, curCell=0, bob=0, gyro=0;
+function reframe(Q){
+  let p=Q.p,f=Q.f,r=Q.r;
+  if(K===0){
+    p=[1,p[1]/p[0],p[2]/p[0]];
+    const nf=Math.hypot(f[1],f[2]); f=[0,f[1]/nf,f[2]/nf];
+    const d=r[1]*f[1]+r[2]*f[2]; r=[0,r[1]-d*f[1],r[2]-d*f[2]];
+    const nr=Math.hypot(r[1],r[2]); r=[0,r[1]/nr,r[2]/nr];
+  } else {
+    const np=Math.sqrt(dotk(p,p)/K); p=p.map(x=>x/np);
+    let a=dotk(f,p)/K; f=[f[0]-a*p[0],f[1]-a*p[1],f[2]-a*p[2]];
+    const nf=Math.sqrt(dotk(f,f)); f=f.map(x=>x/nf);
+    a=dotk(r,p)/K; r=[r[0]-a*p[0],r[1]-a*p[1],r[2]-a*p[2]];
+    const b=dotk(r,f); r=[r[0]-b*f[0],r[1]-b*f[1],r[2]-b*f[2]];
+    const nr=Math.sqrt(dotk(r,r)); r=r.map(x=>x/nr);
+  }
+  Q.p=p;Q.f=f;Q.r=r;
+}
+function boost(Q,s,dir){
+  const c=Ck(s),sn=Sk(s),p=Q.p,v=Q[dir];
+  Q.p=[p[0]*c+v[0]*sn,p[1]*c+v[1]*sn,p[2]*c+v[2]*sn];
+  Q[dir]=[-K*p[0]*sn+v[0]*c,-K*p[1]*sn+v[1]*c,-K*p[2]*sn+v[2]*c];
+}
+function turn(Q,a){
+  const c=Math.cos(a),s=Math.sin(a),f=Q.f,r=Q.r;
+  Q.f=[f[0]*c+r[0]*s,f[1]*c+r[1]*s,f[2]*c+r[2]*s];
+  Q.r=[-f[0]*s+r[0]*c,-f[1]*s+r[1]*c,-f[2]*s+r[2]*c];
+}
+/* Turning is the only thing that moves the gyro relative to your heading. */
+function turnPlayer(a){turn(P,a);gyro=wrap(gyro-a);}
+const gyroVec=()=>{const c=Math.cos(gyro),s=Math.sin(gyro);
+  return [P.f[0]*c+P.r[0]*s,P.f[1]*c+P.r[1]*s,P.f[2]*c+P.r[2]*s];};
+const headingOf=e=>Math.atan2(dotk(e,P.r),dotk(e,P.f));   // tangent vector → angle from heading
+function cellAt(pt,from){
+  let best=from,bd=dist(pt,cells[from].c);
+  for(let j=0;j<Pp;j++){const n=cells[from].nbr[j];if(n<0)continue;
+    const d=dist(pt,cells[n].c);if(d<bd){bd=d;best=n;}}
+  return best;
+}
+function placeAt(id,facingEdge){
+  const cl=cells[id];
+  P.p=cl.c.slice();
+  const ang=thE(facingEdge||0);
+  P.f=app(cl.M,[0,Math.cos(ang),Math.sin(ang)]);
+  P.r=app(cl.M,[0,-Math.sin(ang),Math.cos(ang)]);
+  reframe(P); curCell=id; lastExpand=-1;
+}
+
+/* Hyperbolic coordinates grow like cosh(d); re-base the world on the player before
+   precision goes, and re-orthonormalise the cell matrices that matter. */
+function orthoM(M){
+  let p=[M[0],M[3],M[6]],f=[M[1],M[4],M[7]],r=[M[2],M[5],M[8]];
+  const Q={p,f,r};reframe(Q);p=Q.p;f=Q.f;r=Q.r;
+  return [p[0],f[0],r[0],p[1],f[1],r[1],p[2],f[2],r[2]];
+}
+function recenter(){
+  const F=[P.p[0],P.f[0],P.r[0],P.p[1],P.f[1],P.r[1],P.p[2],P.f[2],P.r[2]];
+  const G=lorentzInv(orthoM(F));
+  for(const cl of cells){
+    cl.M=mul(G,cl.M); if(cl.M[0]<4e3) cl.M=orthoM(cl.M);
+    cl.c=app(cl.M,ORIGIN); cl.V=cellVerts(cl.M);
+  }
+  for(const m of marks){m.p=app(G,m.p);m.g=app(G,m.g);}
+  P={p:[1,0,0],f:[0,1,0],r:[0,0,1]};
+  cellKey=new Map(); for(const cl of cells) keyPut(cl.c,cl.id);
+  mapAge=1e9;
+}
+
+/* ── worlds ───────────────────────────────────────────────────────────── */
+let world='atrium', phase='intro', lastExpand=-1;
+let marks=[];
+const holoLog={atrium:null,archive:null,hollow:null};   // largest loop reading per world
+let AT=null, AR=null, HO=null;                           // per-world state
+const WORLDS={
+  atrium:{name:'THE ATRIUM',geo:'FLAT · square rooms · 4 × 90° = <b>360°</b>',
+    pal:{h:32,s:22,floor:30,wall:36,bg:'#0b0907'},far:3.6},
+  archive:{name:'THE ARCHIVE',geo:'HYPERBOLIC · pentagons · 5 × 90° = <b>450°</b> (flat needs 540°)',
+    pal:{h:258,s:22,floor:256,wall:250,bg:'#050409'},far:3.2},
+  hollow:{name:'THE HOLLOW',geo:'SPHERICAL · pentagons · 5 × 120° = <b>600°</b> (flat needs 540°)',
+    pal:{h:186,s:26,floor:190,wall:182,bg:'#03080a'},far:2.3}
+};
+
+/* ATRIUM: a 5 × 5 grid of square rooms, hand-laid as a tutorial. */
+const AG=5, ASTART=[2,0];
+function gridOf(c){return [ASTART[0]+Math.round(c[1]/(2*INR)), ASTART[1]+Math.round(-c[2]/(2*INR))];}
+function buildAtrium(){
+  world='atrium'; setupGeometry(0,4,4,0,0.63);
+  cells=[];cellKey=new Map();
+  allowCell=c=>{const [i,j]=gridOf(c);return i>=0&&i<AG&&j>=0&&j<AG;};
+  newCell(IDM);
+  for(let q=0;q<cells.length;q++) for(let j=0;j<Pp;j++) ensureNbr(q,j);
+  const at={};for(const cl of cells){const g=gridOf(cl.c);cl.g=g;at[g[0]+','+g[1]]=cl.id;}
+  const C=(i,j)=>at[i+','+j];
+  const open=(a,b,lock)=>setDoor(C(...a),C(...b),true,lock);
+  // the ring around the pillar at (2,2)
+  open([2,0],[2,1]);
+  const ring=[[2,1],[3,1],[3,2],[3,3],[2,3],[1,3],[1,2],[1,1]];
+  for(let i=0;i<ring.length;i++) open(ring[i],ring[(i+1)%ring.length]);
+  // side galleries
+  open([2,0],[1,0]);open([1,0],[0,0]);open([0,0],[0,1]);open([0,1],[0,2]);open([0,2],[1,2]);
+  open([2,0],[3,0]);open([3,0],[4,0]);open([4,0],[4,1]);open([4,1],[4,2]);open([4,2],[3,2]);
+  // north lock, the top row, and a lock that flat space can never open
+  open([2,3],[2,4],true);
+  open([2,4],[1,4]);open([1,4],[0,4]);open([2,4],[3,4]);
+  open([3,4],[4,4],true);
+  cells[C(2,2)].kind='pillar';
+  cells[C(0,4)].kind='seam';
+  cells[C(4,4)].kind='sealed';
+  AT={plinth:C(2,1),ring:new Set(ring.slice(1).map(g=>C(...g))),visited:new Set(),loopDone:false,
+      north:{cell:C(2,3),j:edgeTo(C(2,3),C(2,4))},east:{cell:C(3,4),j:edgeTo(C(3,4),C(4,4))},seam:C(0,4)};
+  placeAt(C(...ASTART),3);                 // edge 3 points north (screen up on the map)
+  marks=[{p:cells[AT.plinth].c.slice(),g:app(cells[AT.plinth].M,[0,0,-1]),plinth:true,travelled:0}];
+  gyro=0;
+}
+
+/* ARCHIVE: the unbounded {5,4} maze, grown lazily as a random spanning tree with
+   extra doors for loops, plus three vault rooms sealed behind gyro locks. */
+function buildArchive(){
+  world='archive'; setupGeometry(-1,5,4,PI/5,0);
+  cells=[];cellKey=new Map();reseed(91031);newDoorP=0.38;
+  allowCell=()=>true;
+  newCell(IDM); P={p:[1,0,0],f:[0,1,0],r:[0,0,1]};
+  expandAround(0,5.2);
+  AR={vaults:[],engine:false};
+  const entry=c=>dist(c,cells[0].c);
+  const bearing=c=>Math.atan2(c[2],c[1]);
+  for(const target of [1.9,2.9,3.9]){
+    let best=-1,bd=1e9;
+    for(const cl of cells){
+      if(cl.id===0||cl.kind||cl.nbr.includes(0)) continue;
+      if(AR.vaults.some(v=>Math.abs(wrap(bearing(cl.c)-bearing(cells[v.cell].c)))<1.6)) continue;
+      const e=Math.abs(entry(cl.c)-target); if(e<bd){bd=e;best=cl.id;}
+    }
+    makeVault(best);
+  }
+  repairConnectivity();
+  cells[0].kind='entrance';
+  placeAt(0,0); gyro=0; marks=[];
+}
+function makeVault(v){
+  const V=cells[v]; V.kind='vault';
+  for(let j=0;j<Pp;j++) ensureNbr(v,j);
+  // the door faces back toward the entrance
+  let bj=0,bd=1e9;
+  for(let j=0;j<Pp;j++){const n=V.nbr[j];const d=dist(cells[n].c,cells[0].c);if(d<bd){bd=d;bj=j;}}
+  for(let j=0;j<Pp;j++){setEdge(v,j,'wall',true);setEdge(v,j,'lock',false);}
+  const A=V.nbr[bj];
+  setEdge(v,bj,'wall',false); setEdge(v,bj,'lock',true);
+  /* Guarantee a small loop next to the lock: open all four doors around one corner
+     of the approach room. Walking it turns the gyro by the area it encloses. */
+  const Ac=cells[A];
+  for(let jj=1;jj<Pp;jj++){
+    const j=(bj+jj)%Pp, jm=(j+Pp-1)%Pp;
+    if(Ac.nbr[j]===v||Ac.nbr[jm]===v) continue;
+    const ring=cornerRooms(A,j); if(!ring) continue;
+    const {B,C,D,eB,eC}=ring;
+    if([B,C,D].some(x=>cells[x].kind)) continue;
+    for(const [x,e] of [[A,j],[A,jm],[B,eB],[C,eC]]) setEdge(x,e,'wall',false);
+    break;
+  }
+  AR.vaults.push({cell:v,got:false,lockCell:A,j:bj});
+}
+/* The four rooms around corner j of room A (vertex V[j], where edges j−1 and j meet):
+   B across edge j, C across edge j−1, and D diagonally opposite, found by which of
+   B's doors also touches that corner point. */
+function cornerRooms(A,j){
+  const X=cells[A].V[j], B=ensureNbr(A,j), C=ensureNbr(A,(j+Pp-1)%Pp);
+  if(B<0||C<0) return null;
+  let D=-1,eB=-1;
+  for(let e=0;e<Pp;e++){
+    if(cells[B].nbr[e]===A) continue;
+    const a=cells[B].V[e],b=cells[B].V[(e+1)%Pp];
+    if(dist(a,X)<1e-6||dist(b,X)<1e-6){const n=ensureNbr(B,e);if(n>=0&&n!==A){D=n;eB=e;break;}}
+  }
+  if(D<0) return null;
+  for(let e=0;e<Pp;e++) ensureNbr(C,e);
+  const eC=edgeTo(C,D); if(eC<0) return null;
+  return {B,C,D,eB,eC};
+}
+/* Sealing a vault can cut off rooms the spanning tree reached through it. Reopen
+   the cheapest door from each stranded room back into the reachable set. */
+function repairConnectivity(){
+  for(let pass=0;pass<50;pass++){
+    const reach=new Uint8Array(cells.length);reach[0]=1;const q=[0];
+    while(q.length){const i=q.pop();for(let j=0;j<Pp;j++){const n=cells[i].nbr[j];
+      if(n>=0&&!reach[n]&&(!cells[i].wall[j]||cells[i].lock[j])&&!(cells[n].kind==='vault'&&!cells[i].lock[j])){reach[n]=1;q.push(n);}}}
+    let fixed=0;
+    for(const cl of cells){
+      if(reach[cl.id]||cl.kind==='vault') continue;
+      for(let j=0;j<Pp;j++){const n=cl.nbr[j];
+        if(n>=0&&reach[n]&&cells[n].kind!=='vault'){setEdge(cl.id,j,'wall',false);fixed++;break;}}
+    }
+    if(!fixed) break;
+  }
+}
+
+/* HOLLOW: the {5,3} tiling of the sphere is a dodecahedron, twelve rooms in all.
+   The core sits at the antipode of where you arrive, behind five gyro locks. */
+function buildHollow(){
+  world='hollow'; setupGeometry(1,5,3,PI/5,0);
+  cells=[];cellKey=new Map();allowCell=()=>true;
+  newCell(IDM);
+  for(let q=0;q<cells.length;q++) for(let j=0;j<Pp;j++) ensureNbr(q,j);
+  let core=0,lo=2;
+  for(const cl of cells){const d=dotk(cl.c,cells[0].c);if(d<lo){lo=d;core=cl.id;}}
+  for(const cl of cells) for(let j=0;j<Pp;j++) cl.wall[j]=false;
+  for(let j=0;j<Pp;j++) setEdge(core,j,'lock',true);
+  cells[core].kind='core';
+  HO={core};
+  placeAt(0,0); marks=[];
+}
+
+/* ── the supertask ────────────────────────────────────────────────────── */
+/* Speed doubles every ST_DD metres: v(s) = V0·2^(s/DD). The time to cover distance s
+   is t(s) = T·(1 − 2^(−s/DD)) with T = DD/(V0·ln 2), so s(t) = −DD·log₂(1 − t/T):
+   finite time, infinite distance. It runs on the real clock. Distance blows past
+   anything a frame can show as t → T, which is exactly what the maths says. */
+const ST_V0=6, ST_DD=30, ST_T=ST_DD/(ST_V0*Math.LN2);
+let ST=null;
+/* The view is rendered from a pristine copy of the {5,4} tiling, flying along one
+   of its mirror lines. Reflections in the edge line at a door midpoint and in the
+   perpendicular diagonal at the next corner compose to a translation by
+   2(INR+CIRC) along that line, which maps the tiling onto itself, so the view at
+   any distance s is exactly the view at s mod that period. */
+function buildGhost(){
+  const g=[], key=new Map(), put=(c,id)=>{const [a,b]=kxy(c);key.set(a+','+b,id);};
+  const find=c=>{const [a,b]=kxy(c);for(let x=-1;x<=1;x++)for(let y=-1;y<=1;y++){const id=key.get((a+x)+','+(b+y));if(id!=null&&dist(g[id].c,c)<0.05)return id;}return -1;};
+  g.push({M:IDM,c:ORIGIN.slice(),V:cellVerts(IDM)});put(ORIGIN,0);
+  for(let i=0;i<g.length&&g.length<900;i++){
+    if(dist(g[i].c,ORIGIN)>4.6) continue;
+    for(let j=0;j<Pp;j++){const M2=mul(g[i].M,REFL[j]),c2=app(M2,ORIGIN);
+      if(find(c2)<0){g.push({M:M2,c:c2,V:cellVerts(M2)});put(c2,g.length-1);}}
+  }
+  return g;
+}
+
+/* ── camera ───────────────────────────────────────────────────────────── */
+let W=0,H=0,CX=0,CY=0,S=0,DPR=1;
+const cv=document.getElementById('c'), ctx=cv.getContext('2d',{alpha:false});
+const E=id=>document.getElementById(id);
+let _cp=1,_sp=0,_px=0,_py=0,_d=0,_b=0;
+function camUpdate(){_cp=Math.cos(pitch);_sp=Math.sin(pitch);}
+function projDir(b,e){
+  const ce=Math.cos(e),cf=ce*Math.cos(b),cr=ce*Math.sin(b),cu=Math.sin(e);
+  const F=cf*_cp+cu*_sp; if(F<0.08) return false;
+  const U=-cf*_sp+cu*_cp; _px=CX+S*(cr/F); _py=CY-S*(U/F);
+  return _px>-8*W&&_px<9*W&&_py>-8*H&&_py<9*H;
+}
+function rel(c){
+  if(K===0){const dx=c[1]-P.p[1],dy=c[2]-P.p[2];_d=Math.hypot(dx,dy);
+    _b=Math.atan2(dx*P.r[1]+dy*P.r[2],dx*P.f[1]+dy*P.f[2]);return _d;}
+  _d=dist(P.p,c);_b=Math.atan2(dotk(c,P.r),dotk(c,P.f));return _d;
+}
+const NEARF=0.05;
+function camInto(b,e,out,i){const ce=Math.cos(e),cf=ce*Math.cos(b),cr=ce*Math.sin(b),cu=Math.sin(e);
+  out[i]=cf*_cp+cu*_sp;out[i+1]=cr;out[i+2]=-cf*_sp+cu*_cp;}
+const mkBuf=()=>({n:0,b:[],f:[],c:[],d:[],t:[],L:0,near:1e9});
+const EBUF=[];for(let i=0;i<6;i++)EBUF.push(mkBuf());
+const DBUF=mkBuf();
+function sampleArc(A,B,t0,t1,E_,segs){
+  E_.n=0;E_.near=1e9;
+  if(!tangent(A,B)) return 0;
+  const ux=_ux,uy=_uy,uz=_uz;E_.L=_ud;
+  const n=Math.max(2,segs|0);
+  for(let i=0;i<=n;i++){
+    const t=t0+(t1-t0)*i/n,c=Ck(t),s=Sk(t);
+    rel([A[0]*c+ux*s,A[1]*c+uy*s,A[2]*c+uz*s]);
+    const dm=Math.max(_d*R,0.05),b=_b;
+    if(_d<E_.near)E_.near=_d;
+    E_.b[i]=b;
+    camInto(b,Math.atan((0-EYE)/dm),E_.f,i*3);
+    camInto(b,Math.atan((CEIL_H-EYE)/dm),E_.c,i*3);
+    camInto(b,Math.atan((DOOR_H-EYE)/dm),E_.d,i*3);
+    camInto(b,Math.atan((CEIL_H*0.93-EYE)/dm),E_.t,i*3);
+  }
+  E_.n=n+1;return E_.n;
+}
+/* Polygons are clipped against the near plane (Sutherland–Hodgman), never culled
+   by sample, or the floor underfoot shreds and walls blink. */
+let _poly=[],_clipped=[];
+const polyReset=()=>{_poly.length=0;};
+const polyPush=(src,i)=>{_poly.push(src[i],src[i+1],src[i+2]);};
+function buildPath(){
+  const n=_poly.length/3; if(n<3) return false;
+  _clipped.length=0;
+  for(let i=0;i<n;i++){
+    const a=i*3,b=((i+1)%n)*3,F1=_poly[a],F2=_poly[b],in1=F1>=NEARF,in2=F2>=NEARF;
+    if(in1)_clipped.push(_poly[a],_poly[a+1],_poly[a+2]);
+    if(in1!==in2){const t=(NEARF-F1)/(F2-F1);
+      _clipped.push(NEARF,_poly[a+1]+t*(_poly[b+1]-_poly[a+1]),_poly[a+2]+t*(_poly[b+2]-_poly[a+2]));}
+  }
+  if(_clipped.length<9) return false;
+  ctx.beginPath();
+  for(let i=0;i<_clipped.length;i+=3){const F=_clipped[i],x=CX+S*_clipped[i+1]/F,y=CY-S*_clipped[i+2]/F;
+    if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);}
+  ctx.closePath();return true;
+}
+let _bb=[0,0,0,0];
+function pathMetrics(){
+  let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9,a=0,px=0,py=0,fx=0,fy=0;const n=_clipped.length/3;
+  for(let i=0;i<n;i++){const F=_clipped[i*3],x=CX+S*_clipped[i*3+1]/F,y=CY-S*_clipped[i*3+2]/F;
+    if(x<x0)x0=x;if(x>x1)x1=x;if(y<y0)y0=y;if(y>y1)y1=y;
+    if(i===0){fx=x;fy=y;}else a+=px*y-x*py;px=x;py=y;}
+  a+=px*fy-fx*py;_bb=[x0,y0,x1,y1];return Math.abs(a)*0.5;
+}
+function bandPath(E_,top,bot){polyReset();
+  for(let k=0;k<E_.n;k++)polyPush(E_[top],k*3);
+  for(let k=E_.n-1;k>=0;k--)polyPush(E_[bot],k*3);
+  return buildPath();}
+function fillBand(E_,top,bot,fill,stroke,lw){if(!bandPath(E_,top,bot))return;
+  if(fill){ctx.fillStyle=fill;ctx.fill();}
+  if(stroke){ctx.strokeStyle=stroke;ctx.lineWidth=lw||1;ctx.stroke();}}
+function strokeCurve(E_,key,style,lw){
+  let started=false;ctx.beginPath();
+  for(let k=0;k<E_.n;k++){const F=E_[key][k*3];if(F<NEARF){started=false;continue;}
+    const x=CX+S*E_[key][k*3+1]/F,y=CY-S*E_[key][k*3+2]/F;
+    if(!started){ctx.moveTo(x,y);started=true;}else ctx.lineTo(x,y);}
+  ctx.strokeStyle=style;ctx.lineWidth=lw||1;ctx.stroke();
+}
+const doorHalf=()=>(DOOR_W*0.5)/R;
+
+/* ── portal rendering ─────────────────────────────────────────────────── */
+/* Depth-first through doorways, largest opening first, each child clipped to the
+   door-shaped opening it is seen through. Nested canvas clips intersect, so
+   nothing is ever seen through a wall. In the Hollow the same room can be reached
+   by different routes; a distance cap keeps every view short of the antipode. */
+let drawBudget=0;
+function renderFrom(ci,depth,fromEdge,time){
+  if(depth>PORTAL_DEPTH||drawBudget<=0) return;
+  const cl=cells[ci];
+  if(depth>0&&dist(P.p,cl.c)>WORLDS[world].far+CIRC) return;
+  drawBudget--;
+  if(!cl.seen){cl.seen=true;mapAge=1e9;}
+  drawCellGeometry(cl,time);
+  drawCellObjects(cl,time);
+  const doors=[];
+  for(let j=0;j<Pp;j++){
+    if(cl.wall[j]||j===fromEdge) continue;
+    if(cl.lock[j]&&!cl.unl[j]) continue;
+    const n=cl.nbr[j]; if(n<0) continue;
+    const A=cl.V[j],B=cl.V[(j+1)%Pp]; if(!tangent(A,B)) continue;
+    const L=_ud,h=doorHalf();
+    sampleArc(A,B,L*0.5-h,L*0.5+h,DBUF,5);
+    if(!bandPath(DBUF,'d','f')) continue;
+    const area=pathMetrics();
+    if(area<MIN_PORTAL) continue;
+    if(_bb[2]<0||_bb[0]>W||_bb[3]<0||_bb[1]>H) continue;
+    doors.push({j,n,area});
+  }
+  doors.sort((a,b)=>b.area-a.area);
+  for(const d of doors){
+    if(drawBudget<=0) break;
+    const A=cl.V[d.j],B=cl.V[(d.j+1)%Pp]; if(!tangent(A,B)) continue;
+    const L=_ud,h=doorHalf();
+    sampleArc(A,B,L*0.5-h,L*0.5+h,DBUF,5);
+    if(!bandPath(DBUF,'d','f')) continue;
+    ctx.save();ctx.clip();renderFrom(d.n,depth+1,cl.be[d.j],time);ctx.restore();
+  }
+}
+
+function outline(key,fill,stroke){
+  polyReset();
+  for(let j=0;j<Pp;j++){const E_=EBUF[j];for(let k=0;k<E_.n-1;k++)polyPush(E_[key],k*3);}
+  if(!buildPath()) return;
+  if(fill){ctx.fillStyle=fill;ctx.fill();}
+  if(stroke){ctx.strokeStyle=stroke;ctx.lineWidth=1;ctx.stroke();}
+}
+function drawCellGeometry(cl,time){
+  const pal=WORLDS[world].pal, far=WORLDS[world].far;
+  const dC=rel(cl.c);
+  const segs=clamp(Math.round(14/(1+dC*0.6)),3,14);
+  let near=1e9;
+  for(let j=0;j<Pp;j++){const A=cl.V[j],B=cl.V[(j+1)%Pp];
+    if(!tangent(A,B)){EBUF[j].n=0;continue;}
+    sampleArc(A,B,0,_ud,EBUF[j],segs);if(EBUF[j].near<near)near=EBUF[j].near;}
+  const fog=clamp(1-near/(far+1.0),0,1),f2=fog*fog;
+  const vault=cl.kind==='vault'||cl.kind==='core', seam=cl.kind==='seam';
+  const fh=vault?44:seam?200:pal.floor;
+  outline('f',`hsl(${fh},${pal.s}%,${8+18*f2}%)`,`hsla(${fh},50%,${40+30*f2}%,${.25+.45*f2})`);
+  outline('c',`hsl(${pal.h},${pal.s}%,${4+10*f2}%)`,`hsla(${pal.h},40%,${30+24*f2}%,${.18+.3*f2})`);
+  const edgeLine=`hsla(${pal.h},60%,${48+30*f2}%,${.4+.45*f2})`;
+  for(let j=0;j<Pp;j++){
+    const E_=EBUF[j]; if(!E_.n) continue;
+    // each face gets its own tone, so rooms read as solids rather than paper
+    const tone=0.72+0.28*Math.cos(thE(j)*1.7+cl.id*0.9);
+    const wh=vault?40:pal.wall;
+    const wallFill=`hsl(${wh},${pal.s-4+8*f2}%,${(9+28*f2)*tone}%)`;
+    const A=cl.V[j],B=cl.V[(j+1)%Pp],L=E_.L,h=doorHalf();
+    const sg=Math.max(2,Math.round(E_.n/2));
+    if(cl.wall[j]||h*2>=L||cl.nbr[j]<0){
+      fillBand(E_,'c','f',wallFill,edgeLine);
+      if(fog>0.2) strokeCurve(E_,'t',`hsla(${pal.h},40%,70%,${.12+.25*f2})`);
+    } else {
+      sampleArc(A,B,0,L*0.5-h,DBUF,sg);fillBand(DBUF,'c','f',wallFill,edgeLine);
+      sampleArc(A,B,L*0.5+h,L,DBUF,sg);fillBand(DBUF,'c','f',wallFill,edgeLine);
+      sampleArc(A,B,L*0.5-h,L*0.5+h,DBUF,sg);fillBand(DBUF,'c','d',wallFill,edgeLine);
+      if(cl.lock[j]){
+        sampleArc(A,B,L*0.5-h,L*0.5+h,DBUF,sg);
+        if(!cl.unl[j]){
+          const pul=.55+.45*Math.sin(time*.004+j);
+          fillBand(DBUF,'d','f',`rgba(255,190,110,${.18+.12*pul})`,`rgba(255,214,150,${.5+.4*pul})`,1.6);
+        } else fillBand(DBUF,'d','f',null,'rgba(154,230,184,.7)',1.4);
+      }
+    }
+  }
+}
+
+/* objects standing in a room */
+function vertical(c,z0,z1){
+  const d=rel(c); if(Math.abs(_b)>1.45) return null;
+  const dm=Math.max(d*R,0.3);
+  if(!projDir(_b,Math.atan((z0-EYE)/dm))) return null; const yb=_py,x=_px;
+  if(!projDir(_b,Math.atan((z1-EYE)/dm))) return null;
+  return {x,yb,yt:_py,dm};
+}
+function floorRing(c,M,radiusM,style,lw){
+  if(!M) return;
+  polyReset();const buf=[];
+  for(let i=0;i<24;i++){
+    const a=TAU*i/24,u=app(M,[0,Math.cos(a),Math.sin(a)]);
+    const s=radiusM/R,cc=Ck(s),sn=Sk(s);
+    rel([c[0]*cc+u[0]*sn,c[1]*cc+u[1]*sn,c[2]*cc+u[2]*sn]);
+    camInto(_b,Math.atan((0.02-EYE)/Math.max(_d*R,0.05)),buf,0);_poly.push(buf[0],buf[1],buf[2]);
+  }
+  if(!buildPath()) return;
+  ctx.strokeStyle=style;ctx.lineWidth=lw||1.5;ctx.stroke();
+}
+function drawCellObjects(cl,time){
+  const pul=.6+.4*Math.sin(time*.004+cl.id);
+  if(cl.kind==='vault'){
+    const v=AR.vaults.find(x=>x.cell===cl.id);
+    if(v&&!v.got) drawShard(cl.c,time,'#ffd79a');
+  }
+  if(cl.kind==='core') drawShard(cl.c,time,'#9ae6ff');
+  if(cl.kind==='seam'){
+    const o=vertical(cl.c,0,4.2);
+    if(o){const w=Math.max(2,S*0.18/o.dm);
+      const g=ctx.createLinearGradient(o.x-w*3,0,o.x+w*3,0);
+      g.addColorStop(0,'rgba(140,220,255,0)');g.addColorStop(.5,`rgba(220,245,255,${.55+.4*pul})`);g.addColorStop(1,'rgba(140,220,255,0)');
+      ctx.fillStyle=g;ctx.fillRect(o.x-w*3,o.yt,w*6,o.yb-o.yt);}
+  }
+  if(cl.kind==='pillar') return;
+  if(world==='atrium'&&cl.id===AT.plinth) floorRing(cl.c,cl.M,1.1,`rgba(154,230,184,${.5+.3*pul})`,2);
+  if(world==='archive'&&cl.id===0){
+    const ready=AR.vaults.every(v=>v.got);
+    floorRing(cl.c,cl.M,1.3,ready?`rgba(255,214,150,${.6+.4*pul})`:'rgba(150,140,200,.35)',ready?2.4:1.2);
+    if(ready) floorRing(cl.c,cl.M,0.8,`rgba(255,214,150,${.4+.3*pul})`,1.4);
+  }
+  for(const m of marks){
+    if(m.plinth||cellAt(m.p,cl.id)!==cl.id) continue;
+    const o=vertical(m.p,0,1.2); if(!o) continue;
+    ctx.strokeStyle='rgba(154,230,184,.9)';ctx.lineWidth=2;
+    ctx.beginPath();ctx.moveTo(o.x,o.yb);ctx.lineTo(o.x,o.yt);ctx.stroke();
+    ctx.beginPath();ctx.arc(o.x,o.yt,Math.max(2,S*0.08/o.dm),0,TAU);ctx.fillStyle='rgba(154,230,184,.9)';ctx.fill();
+  }
+}
+function drawShard(c,time,col){
+  const o=vertical(c,1.0,1.9); if(!o) return;
+  const sz=clamp(S*0.6/o.dm,3,160),y=(o.yb+o.yt)/2,pul=.7+.3*Math.sin(time*.004);
+  ctx.save();ctx.translate(o.x,y);ctx.rotate(time*.0011);
+  ctx.shadowColor=col;ctx.shadowBlur=26*pul;ctx.fillStyle=col;ctx.globalAlpha=.6+.35*pul;
+  ctx.beginPath();ctx.moveTo(0,-sz);ctx.lineTo(sz*.44,0);ctx.lineTo(0,sz);ctx.lineTo(-sz*.44,0);ctx.closePath();ctx.fill();
+  ctx.restore();
+}
+
+/* ── supertask view: the bare tiling, rushing past ────────────────────── */
+function renderSupertask(time){
+  const T=ST.t/ST_T, s=-ST_DD*Math.log2(Math.max(1-T,1e-300)), v=ST_V0/Math.max(1-T,1e-300);
+  const L=2*(INR+CIRC), u=((s/R)%L+L)%L;
+  // canonical frame flying along the mirror line through edge 0's midpoint
+  const a=thE(0),ax=[0,Math.cos(a),Math.sin(a)],rx=[0,-Math.sin(a),Math.cos(a)];
+  const save=P; P={p:[Ck(u),ax[1]*Sk(u),ax[2]*Sk(u)],f:[Sk(u),ax[1]*Ck(u),ax[2]*Ck(u)],r:rx};
+  ctx.fillStyle='#030208';ctx.fillRect(0,0,W,H);
+  const blue=clamp(Math.log10(v)/6,0,1);
+  for(const g of ST.ghost){
+    const dc=rel(g.c); if(dc>4.2) continue;
+    const fade=clamp(1-dc/4.2,0,1);
+    for(let j=0;j<Pp;j++){
+      const A=g.V[j],B=g.V[(j+1)%Pp]; if(!tangent(A,B)) continue;
+      sampleArc(A,B,0,_ud,DBUF,6);
+      strokeCurve(DBUF,'f',`hsla(${lerp(262,205,blue)},70%,${55+25*fade}%,${.12+.6*fade*fade})`,1.2);
+      strokeCurve(DBUF,'c',`hsla(${lerp(262,205,blue)},50%,60%,${.05+.25*fade*fade})`,1);
+    }
+    for(const vtx of g.V){
+      const o=vertical(vtx,0,CEIL_H); if(!o) continue;
+      ctx.strokeStyle=`hsla(${lerp(262,205,blue)},60%,70%,${.05+.35*fade*fade})`;ctx.lineWidth=1;
+      ctx.beginPath();ctx.moveTo(o.x,o.yb);ctx.lineTo(o.x,o.yt);ctx.stroke();
+    }
+  }
+  P=save;
+  // streaks grow with log speed
+  const k=clamp(Math.log2(v/ST_V0)/12,0,1);
+  if(k>0){ctx.save();ctx.translate(CX,CY);
+    for(let i=0;i<140;i++){const ang=i*2.399963,r0=(30+((i*97)%400))*(1+k),len=r0*k*1.6;
+      ctx.strokeStyle=`rgba(200,220,255,${.05+.25*k})`;ctx.lineWidth=1;ctx.beginPath();
+      ctx.moveTo(Math.cos(ang)*r0,Math.sin(ang)*r0*0.6);ctx.lineTo(Math.cos(ang)*(r0+len),Math.sin(ang)*(r0+len)*0.6);ctx.stroke();}
+    ctx.restore();}
+  // where you are in the Poincaré disk of the Archive
+  const mr=Math.min(W,H)*0.17,mx=W-mr-30,my=mr+30;
+  drawMapLayer(mx,my,mr);
+  const pos=stDiskPos(s/R);
+  drawArrow(mx+pos[0]*mr,my+pos[1]*mr,pos[2],'#fff',7);
+  ctx.font='11px ui-monospace,monospace';ctx.textAlign='left';
+  const rows=[
+    ['clock',ST.t.toFixed(3)+' s  of  '+ST_T.toFixed(3)+' s'],
+    ['time left',(ST_T-ST.t).toFixed(3)+' s'],
+    ['speed',fmtBig(v)+' m/s'],
+    ['distance',fmtBig(s)+' m'],
+    ['doublings',(s/ST_DD).toFixed(2)],
+    ['disk radius',(Math.hypot(pos[0],pos[1])).toFixed(9)]];
+  rows.forEach(([k,val],i)=>{ctx.fillStyle='rgba(140,135,180,.9)';ctx.fillText(k,mx-mr,my+mr+28+i*16);
+    ctx.fillStyle='#ffe2b4';ctx.fillText(val,mx-mr+92,my+mr+28+i*16);});
+}
+const fmtBig=x=>!isFinite(x)?'∞':x<1e5?x.toFixed(1):x.toExponential(3);
+/* Position on the entrance-centred Poincaré disk after flying u units from the
+   start point p0 along f0. p(u) = e^u(p0+f0)/2 + e^-u(p0−f0)/2; dividing through by
+   e^u keeps it finite all the way to the rim, which it reaches exactly at t = T. */
+function stDiskPos(u){
+  const a=ST.p0.map((x,i)=>(x+ST.f0[i])/2),b=ST.p0.map((x,i)=>(x-ST.f0[i])/2);
+  const e=Math.exp(-u),e2=e*e;
+  const q0=a[0]+e2*b[0],q1=a[1]+e2*b[1],q2=a[2]+e2*b[2];
+  const den=e+q0, x=q1/den, y=q2/den;
+  // heading on the disk: toward the ideal point the flight converges on
+  const lx=a[1]/a[0], ly=a[2]/a[0];
+  return [x,y,Math.atan2(ly-y,lx-x)];
+}
+
+/* ── maps: fixed in each world, only your arrow moves ─────────────────── */
+let mapCv=null,mapAge=1e9,mapSize=1;
+let Einv=IDM;
+function mapProj(c){
+  if(world==='atrium'){const half=2.5*2*INR;
+    return [c[1]/c[0]/half, (c[2]/c[0]+2*2*INR)/half,1];}
+  if(world==='archive'){const q=app(Einv,c);return [q[1]/(1+q[0]),q[2]/(1+q[0]),1];}
+  // Hollow: two orthographic hemispheres, front (x0 ≥ 0) on the left, back on the right
+  return [c[1],c[2],c[0]>=0?1:-1];
+}
+function mapXY(c,mx,my,mr){
+  const q=mapProj(c);
+  if(world==='hollow'){const off=q[2]>0?-mr*1.08:mr*1.08;return [mx+off+(q[2]>0?q[0]:-q[0])*mr,my+q[1]*mr,q[2]];}
+  return [mx+q[0]*mr,my+q[1]*mr,1];
+}
+function drawMapLayer(mx,my,mr){
+  const side=Math.ceil(mr*2+40)*(world==='hollow'?2.2:1),sideH=Math.ceil(mr*2+40);
+  if(!mapCv||mapCv._w!==side||mapCv._h!==sideH||mapCv._world!==world){
+    mapCv=document.createElement('canvas');mapCv.width=Math.ceil(side*DPR);mapCv.height=Math.ceil(sideH*DPR);
+    mapCv._w=side;mapCv._h=sideH;mapCv._world=world;mapAge=1e9;}
+  if(mapAge++>30){
+    mapAge=0;
+    const o=mapCv.getContext('2d');o.setTransform(DPR,0,0,DPR,0,0);o.clearRect(0,0,side,sideH);
+    const cx=side/2,cy=sideH/2;
+    if(world==='archive') Einv=lorentzInv(cells[0].M);
+    // backdrop
+    o.fillStyle='rgba(4,4,10,.82)';o.strokeStyle='rgba(160,150,230,.3)';o.lineWidth=1;
+    if(world==='atrium'){o.fillRect(cx-mr-6,cy-mr-6,mr*2+12,mr*2+12);o.strokeRect(cx-mr-6,cy-mr-6,mr*2+12,mr*2+12);}
+    else if(world==='archive'){o.beginPath();o.arc(cx,cy,mr,0,TAU);o.fill();o.stroke();}
+    else for(const s of [-1,1]){o.beginPath();o.arc(cx+s*mr*1.08,cy,mr,0,TAU);o.fill();o.stroke();}
+    for(const cl of cells){
+      const special=cl.kind==='vault'||cl.kind==='core'||cl.kind==='seam'||cl.id===0;
+      if(!cl.seen&&!special) continue;
+      if(world==='archive'&&dist(cl.c,cells[0].c)>7.5) continue;
+      for(let j=0;j<Pp;j++){
+        const open=!cl.wall[j]&&cl.nbr[j]>=0, lock=cl.lock[j]&&!cl.unl[j];
+        if(open&&!lock&&cl.seen) continue;
+        if(!cl.seen&&!lock) continue;
+        if(!tangent(cl.V[j],cl.V[(j+1)%Pp])) continue;
+        const A=cl.V[j],L=_ud,ux=_ux,uy=_uy,uz=_uz,n=world==='archive'?5:3;
+        o.beginPath();let prevSide=0;
+        for(let i=0;i<=n;i++){const t=L*i/n,c=Ck(t),s=Sk(t);
+          const pt=[A[0]*c+ux*s,A[1]*c+uy*s,A[2]*c+uz*s];
+          const [x,y,sd]=mapXY(pt,cx,cy,mr);
+          if(i===0||sd!==prevSide)o.moveTo(x,y);else o.lineTo(x,y);prevSide=sd;}
+        o.strokeStyle=lock?'rgba(255,200,120,.95)':`rgba(170,160,240,${cl.seen?.75:.25})`;
+        o.lineWidth=lock?2:1;o.stroke();
+      }
+      if(special){const [x,y]=mapXY(cl.c,cx,cy,mr);
+        let col=null;
+        if(cl.kind==='vault'){const v=AR.vaults.find(q=>q.cell===cl.id);col=v.got?'rgba(154,230,184,.6)':'#ffd79a';}
+        if(cl.kind==='core')col='#9ae6ff';
+        if(cl.kind==='seam')col='#cdeeff';
+        if(world==='archive'&&cl.id===0)col=AR.vaults.every(v=>v.got)?'#ffd79a':'rgba(200,190,255,.6)';
+        if(col){o.beginPath();o.arc(x,y,3.2,0,TAU);o.fillStyle=col;o.fill();}}
+    }
+    o.font='8px ui-monospace,monospace';o.textAlign='center';o.fillStyle='rgba(130,126,170,.9)';
+    const lab=world==='atrium'?'THE ATRIUM · NORTH UP':world==='archive'?'POINCARÉ DISK · CENTRED ON THE ENTRANCE':'NEAR SIDE · FAR SIDE';
+    o.fillText(lab,cx,cy+mr+18);
+  }
+  ctx.drawImage(mapCv,0,0,mapCv.width,mapCv.height,mx-mapCv._w/2,my-mapCv._h/2,mapCv._w,mapCv._h);
+}
+function drawArrow(x,y,ang,col,sz){
+  ctx.save();ctx.translate(x,y);ctx.rotate(ang);
+  ctx.beginPath();ctx.moveTo(sz,0);ctx.lineTo(-sz*.7,sz*.6);ctx.lineTo(-sz*.35,0);ctx.lineTo(-sz*.7,-sz*.6);ctx.closePath();
+  ctx.fillStyle=col;ctx.shadowColor=col;ctx.shadowBlur=8;ctx.fill();ctx.restore();
+}
+function drawMap(){
+  if(mapSize===0) return;
+  const mr=mapSize===2?Math.min(W,H)*0.3:Math.min(W,H)*0.12;
+  const wide=world==='hollow'?2.2:1;
+  const mx=mapSize===2?CX:W-mr*wide-30, my=mapSize===2?CY:mr+34;
+  drawMapLayer(mx,my,mr);
+  const side=Math.ceil(mr*2+40)*wide,sideH=Math.ceil(mr*2+40);
+  const cx=mx,cy=my;
+  for(const m of marks){if(m.plinth)continue;const [x,y]=mapXY(m.p,cx,cy,mr);
+    ctx.beginPath();ctx.arc(x,y,2.5,0,TAU);ctx.fillStyle='rgba(154,230,184,.95)';ctx.fill();}
+  // the arrow: your position, pointing the way you face
+  const [x,y,sd]=mapXY(P.p,cx,cy,mr);
+  const ahead=[P.p[0]*Ck(0.02)+P.f[0]*Sk(0.02),P.p[1]*Ck(0.02)+P.f[1]*Sk(0.02),P.p[2]*Ck(0.02)+P.f[2]*Sk(0.02)];
+  const [x2,y2]=mapXY(ahead,cx,cy,mr);
+  drawArrow(x,y,Math.atan2(y2-y,x2-x),'#ffffff',mapSize===2?9:6);
+}
+
+/* ── the gyro dial ────────────────────────────────────────────────────── */
+let nearLock=null, markRead=null;
+function drawDial(time){
+  const r=46,x=CX,y=H-78;
+  ctx.save();
+  ctx.beginPath();ctx.arc(x,y,r+8,0,TAU);ctx.fillStyle='rgba(6,5,14,.72)';ctx.fill();
+  ctx.strokeStyle='rgba(160,150,230,.35)';ctx.lineWidth=1;ctx.stroke();
+  for(let i=0;i<24;i++){const a=i*TAU/24,l=i%6===0?7:3;
+    ctx.beginPath();ctx.moveTo(x+Math.sin(a)*(r-l),y-Math.cos(a)*(r-l));ctx.lineTo(x+Math.sin(a)*r,y-Math.cos(a)*r);
+    ctx.strokeStyle='rgba(160,150,230,.4)';ctx.stroke();}
+  // your heading is always straight up
+  ctx.beginPath();ctx.moveTo(x,y-r-6);ctx.lineTo(x-4,y-r+1);ctx.lineTo(x+4,y-r+1);ctx.closePath();
+  ctx.fillStyle='rgba(255,255,255,.7)';ctx.fill();
+  if(nearLock){
+    const a=nearLock.target,ok=Math.abs(nearLock.diff)<LOCK_TOL;
+    ctx.beginPath();ctx.arc(x,y,r-2,a-LOCK_TOL-PI/2,a+LOCK_TOL-PI/2);
+    ctx.strokeStyle=ok?'rgba(154,230,184,.95)':'rgba(255,200,120,.85)';ctx.lineWidth=6;ctx.stroke();
+    ctx.font='10px ui-monospace,monospace';ctx.textAlign='center';ctx.fillStyle=ok?'#9ae6b8':'#ffd79a';
+    ctx.fillText(ok?'ALIGNED':'LOCK  off by '+Math.abs(nearLock.diff*DEG).toFixed(0)+'°',x,y-r-16);
+  }
+  // the needle
+  const g=gyro;
+  ctx.beginPath();ctx.moveTo(x-Math.sin(g)*10,y+Math.cos(g)*10);ctx.lineTo(x+Math.sin(g)*(r-6),y-Math.cos(g)*(r-6));
+  ctx.strokeStyle='#ffd79a';ctx.lineWidth=2.4;ctx.shadowColor='#ffb84d';ctx.shadowBlur=10;ctx.stroke();ctx.shadowBlur=0;
+  ctx.beginPath();ctx.arc(x,y,3,0,TAU);ctx.fillStyle='#ffd79a';ctx.fill();
+  ctx.font='9px ui-monospace,monospace';ctx.textAlign='center';ctx.fillStyle='rgba(140,135,180,.9)';
+  ctx.fillText('GYRO',x,y+r+20);
+  if(markRead){ctx.fillStyle='#9ae6b8';ctx.font='10px ui-monospace,monospace';
+    ctx.fillText(markRead,x,y+r+34);}
+  ctx.restore();
+}
+
+/* ── rendering ────────────────────────────────────────────────────────── */
+let flash=0,whiteout=0,bannerT=0,logOpen=false,ovCv=null;
+function bakeOverlay(){
+  ovCv=document.createElement('canvas');ovCv.width=Math.ceil(W*DPR);ovCv.height=Math.ceil(H*DPR);
+  const o=ovCv.getContext('2d');o.setTransform(DPR,0,0,DPR,0,0);
+  const bw=Math.round(W*.24),bh=Math.round(H*.24);
+  const band=(x0,y0,x1,y1,rx,ry,rw,rh,a)=>{const g=o.createLinearGradient(x0,y0,x1,y1);
+    g.addColorStop(0,`rgba(0,0,0,${a})`);g.addColorStop(1,'rgba(0,0,0,0)');o.fillStyle=g;o.fillRect(rx,ry,rw,rh);};
+  band(0,0,bw,0,0,0,bw,H,.42);band(W,0,W-bw,0,W-bw,0,bw,H,.42);
+  band(0,0,0,bh,0,0,W,bh,.5);band(0,H,0,H-bh,0,H-bh,W,bh,.55);
+}
+function render(time){
+  camUpdate();
+  if(phase==='super'||phase==='rim'){
+    renderSupertask(time);
+    if(whiteout>0){ctx.fillStyle=`rgba(245,248,255,${clamp(whiteout,0,1)})`;ctx.fillRect(0,0,W,H);}
+    return;
+  }
+  ctx.fillStyle=WORLDS[world].pal.bg;ctx.fillRect(0,0,W,H);
+  drawBudget=320;
+  renderFrom(curCell,0,-1,time);
+  if(ovCv) ctx.drawImage(ovCv,0,0,ovCv.width,ovCv.height,0,0,W,H);
+  drawMap();
+  if(phase==='play') drawDial(time);
+  ctx.strokeStyle='rgba(255,255,255,.3)';ctx.lineWidth=1;ctx.beginPath();
+  ctx.moveTo(CX-6,CY);ctx.lineTo(CX-2,CY);ctx.moveTo(CX+2,CY);ctx.lineTo(CX+6,CY);
+  ctx.moveTo(CX,CY-6);ctx.lineTo(CX,CY-2);ctx.moveTo(CX,CY+2);ctx.lineTo(CX,CY+6);ctx.stroke();
+  if(flash>0){ctx.fillStyle=`rgba(200,225,255,${flash*.16})`;ctx.fillRect(0,0,W,H);}
+  if(whiteout>0){ctx.fillStyle=`rgba(245,248,255,${clamp(whiteout,0,1)})`;ctx.fillRect(0,0,W,H);}
+}
+
+/* ── movement & collision ─────────────────────────────────────────────── */
+function crossesWall(pt){
+  const n=cellAt(pt,curCell);
+  if(n===curCell) return false;
+  const cl=cells[curCell];
+  for(let j=0;j<Pp;j++) if(cl.nbr[j]===n){
+    if(cl.wall[j]) return true;
+    if(cl.lock[j]&&!cl.unl[j]) return true;
+    const A=cl.V[j],B=cl.V[(j+1)%Pp]; if(!tangent(A,B)) return true;
+    return dist(pt,geoPt(A,_ud*0.5))>doorHalf()*1.12;
+  }
+  return true;
+}
+function tryStep(ang,s){
+  const p0=P.p,f0=P.f,r0=P.r;
+  if(ang)turn(P,ang); boost(P,s,'f'); if(ang)turn(P,-ang); reframe(P);
+  if(crossesWall(P.p)){P.p=p0;P.f=f0;P.r=r0;return false;}
+  curCell=cellAt(P.p,curCell);return true;
+}
+
+/* ── locks ────────────────────────────────────────────────────────────── */
+function checkLocks(time){
+  nearLock=null;
+  const cl=cells[curCell];
+  for(let j=0;j<Pp;j++){
+    if(!cl.lock[j]||cl.unl[j]) continue;
+    const A=cl.V[j],B=cl.V[(j+1)%Pp]; if(!tangent(A,B)) continue;
+    const mid=geoPt(A,_ud*0.5);
+    const dm=dist(P.p,mid)*R; if(dm>LOCK_REACH) continue;
+    const n=cl.nbr[j]; if(n<0||!tangent(mid,cells[n].c)) continue;
+    const through=transport([_ux,_uy,_uz],mid,P.p);   // the door's way through, carried to you
+    const target=headingOf(through), diff=wrap(gyro-target);
+    nearLock={target,diff,cell:curCell,j};
+    if(Math.abs(diff)<LOCK_TOL){
+      setEdge(curCell,j,'unl',true); mapAge=1e9;
+      chime(); flash=.8;
+      banner(time,'LOCK OPEN','the needle pointed through the door');
+      nearLock=null;
+    }
+  }
+}
+
+/* ── update ───────────────────────────────────────────────────────────── */
+let keys=Object.create(null);
+function update(dt,time){
+  if(flash>0)flash-=dt*2.2;
+  if(phase==='super'){
+    ST.t+=dt;
+    if(ST.t>=ST_T){ST.t=ST_T;phase='rim';whiteout=0;ST.rimT=time;
+      banner(time,'THE RIM','infinitely far · reached in '+ST_T.toFixed(3)+' s');chime(true);}
+    return;
+  }
+  if(phase==='rim'){
+    whiteout=Math.min(1.4,(time-ST.rimT)/1200);
+    if(whiteout>=1.4){enterWorld('hollow');whiteout=1;}
+    return;
+  }
+  if(whiteout>0) whiteout=Math.max(0,whiteout-dt*0.8);
+  if(phase!=='play'||logOpen) return;
+
+  const sp=(keys['shift']?RUN:WALK)*dt/R;
+  if(keys['arrowleft'])turnPlayer(-TURN*dt);
+  if(keys['arrowright'])turnPlayer(TURN*dt);
+  let fwd=0,side=0;
+  if(keys['w']||keys['arrowup'])fwd+=1;
+  if(keys['s']||keys['arrowdown'])fwd-=1;
+  if(keys['a'])side-=1;
+  if(keys['d'])side+=1;
+  if(fwd||side){
+    const base=Math.atan2(side,fwd),mag=sp*Math.min(1,Math.hypot(fwd,side));
+    const FAN=[0,.3,-.3,.62,-.62,.95,-.95,1.3,-1.3];
+    for(const a of FAN) if(tryStep(base+a,mag*Math.cos(a))){for(const m of marks)m.travelled+=mag*Math.cos(a);break;}
+    bob+=dt*(keys['shift']?13:8);
+  }
+  if(world==='archive'){
+    if(curCell!==lastExpand){lastExpand=curCell;expandAround(curCell,4.2);}
+    if(Math.acosh(Math.max(P.p[0],1))>1.6) recenter();
+  }
+  checkLocks(time);
+  readMarks(time);
+  worldLogic(time);
+  syncObj();
+}
+/* Holonomy, read off directly: stand on a mark you left and compare the gyro with
+   the one you recorded there, carried to where you stand. */
+function readMarks(time){
+  markRead=null;
+  for(const m of marks){
+    if(dist(P.p,m.p)>MARK_REACH||m.travelled<1.2) continue;
+    const g0=transport(m.g,m.p,P.p);
+    const turned=wrap(gyro-headingOf(g0));
+    markRead=`loop turned the gyro ${(turned*DEG>=0?'+':'')}${(turned*DEG).toFixed(1)}°`;
+    if(!m.reported){m.reported=true;
+      const prev=holoLog[world];
+      if(!prev||Math.abs(turned)>Math.abs(prev))holoLog[world]=turned;}
+    if(m.plinth) m.lastTurned=turned;
+  }
+}
+function worldLogic(time){
+  if(world==='atrium'){
+    if(AT.ring.has(curCell)) AT.visited.add(curCell);
+    const pl=marks[0];
+    if(!AT.loopDone&&curCell===AT.plinth&&AT.visited.size>=AT.ring.size&&dist(P.p,pl.p)<MARK_REACH){
+      AT.loopDone=true;
+      const g0=transport(pl.g,pl.p,P.p),turned=wrap(gyro-headingOf(g0));
+      holoLog.atrium=turned;
+      banner(time,'GYRO TURNED '+(turned*DEG).toFixed(1)+'°','a loop in flat space changes nothing');
+      chime();
+    }
+    if(curCell===AT.plinth&&!AT.loopDone&&AT.visited.size<AT.ring.size&&dist(P.p,pl.p)<MARK_REACH) AT.visited.clear();
+    if(curCell===AT.seam&&cells[AT.north.cell].unl[AT.north.j]) enterWorld('archive');
+  }
+  if(world==='archive'){
+    for(const v of AR.vaults){
+      if(!v.got&&curCell===v.cell&&dist(P.p,cells[v.cell].c)<0.36){
+        v.got=true;flash=1;chime(true);mapAge=1e9;
+        const n=AR.vaults.filter(q=>q.got).length;
+        if(n<3) showLog('SHARD '+n+' OF 3',SHARD_TXT[n-1]);
+        else showLog('SHARD 3 OF 3',SHARD_TXT[2]);
+      }
+    }
+  }
+  if(world==='hollow'){
+    if(curCell===HO.core&&dist(P.p,cells[HO.core].c)<0.4&&phase==='play') finish();
+  }
+}
+const SHARD_TXT=[
+  `Every room here is a pentagon with five right angles. Add them: <em>450°</em>. A flat pentagon
+   needs 540°, so each room is ninety degrees short, and by Gauss–Bonnet that missing ninety is
+   exactly its area. Walk a loop around a room and your gyro comes back turned by that area.
+   That is what opened this door.`,
+  `Count the rooms as you go further out. They multiply: the number within a distance r of the
+   entrance grows like <em>e^r</em>. On the map, the Archive is drawn inside a disk, and every
+   room near the rim is just as big as the one you stand in. The rim itself is infinitely far away.`,
+  `No walk reaches the rim. But a walk that keeps <em>speeding up</em> does: double your speed every
+   30 metres and each stretch takes half as long as the one before. The distance diverges; the time
+   adds up to 7.2 seconds. The Engine in the entrance room does exactly that. Go back to the centre
+   of the map and press <em>E</em> on it.`
+];
+
+const OBJ={
+  atrium:()=>!AT.loopDone?['THE ATRIUM · 1','Walk once around the pillar and come back to the green ring']
+    :!cells[AT.north.cell].unl[AT.north.j]?['THE ATRIUM · 2','Stand at the north door. If the needle points through it, it opens']
+    :['THE ATRIUM · 3','Find the Seam, the bright crack in the north-west room'],
+  archive:()=>{const n=AR.vaults.filter(v=>v.got).length;
+    return n<3?['THE ARCHIVE · SHARDS '+n+' / 3','Reach a vault (gold on the map). Walk loops until the needle points through its door']
+              :['THE ARCHIVE · THE ENGINE','Return to the entrance (centre of the map) and press E on the ring'];},
+  hollow:()=>['THE HOLLOW','Every direction leads to the core on the far side. Open one of its five doors']
+};
+function syncObj(){
+  if(phase!=='play')return;
+  const [a,t]=OBJ[world]();E('oAct').textContent=a;E('oTask').textContent=t;
+}
+
+/* ── transitions ──────────────────────────────────────────────────────── */
+const ARRIVE={
+  atrium:['THE ATRIUM · FLAT SPACE',`Square rooms, four right angles each, <em>360°</em> in all. The dial at the
+    bottom is your gyroscope. Walk once around the pillar and come back to the green ring, and watch
+    what the needle does. (Nothing. That is the point.)`],
+  archive:['THE ARCHIVE · HYPERBOLIC SPACE',`Every room is a pentagon with <em>five right angles</em>. That should not
+    close up, and in flat space it would not. Here it does, and the room is ninety degrees short of flat,
+    which is also its area. Three vaults hold shards, each behind a gyro lock. Your needle will not point
+    through them on arrival. Walk loops near a lock, around a corner or a whole room, and read the dial:
+    each loop turns the needle by the area it went around. Space drops a mark; stand on it again to read a loop exactly.`],
+  hollow:['THE HOLLOW · SPHERICAL SPACE',`You came out of the rim into a closed world: twelve pentagons with
+    <em>120° corners</em>, 600° each, sixty over flat. All of space is these twelve rooms. Curvature has
+    flipped sign, so loops turn your gyro the <em>other</em> way. The core is on the far side, behind five
+    gyro locks. Every direction leads there.`]
+};
+function enterWorld(w){
+  if(w==='atrium')buildAtrium();else if(w==='archive')buildArchive();else buildHollow();
+  pitch=0;bob=0;mapAge=1e9;mapCv=null;
+  E('wName').textContent=WORLDS[w].name;E('wGeo').innerHTML=WORLDS[w].geo;
+  phase='play';ST=null;
+  showLog(...ARRIVE[w]);
+  syncObj();
+  drone(w);
+}
+function engage(time){
+  if(world!=='archive'||phase!=='play'||!AR.vaults.every(v=>v.got)) return;
+  if(curCell!==0||dist(P.p,cells[0].c)*R>2.2){banner(time,'NOT HERE','stand on the ring in the entrance room');return;}
+  // aim along the mirror line through the doorway you face most nearly
+  let bj=0,bb=1e9;
+  for(let j=0;j<Pp;j++){const A=cells[0].V[j],B=cells[0].V[(j+1)%Pp];tangent(A,B);
+    rel(geoPt(A,_ud/2));if(Math.abs(_b)<bb){bb=Math.abs(_b);bj=j;}}
+  const before=P.f.slice();
+  placeAt(0,bj);
+  gyro=wrap(gyro+headingOf(before));
+  Einv=lorentzInv(cells[0].M);
+  ST={t:0,p0:app(Einv,P.p),f0:app(Einv,P.f),ghost:buildGhost()};
+  phase='super';
+  E('oAct').textContent='THE SUPERTASK';
+  E('oTask').textContent='speed doubles every '+ST_DD+' m · the sum of the times converges to '+ST_T.toFixed(3)+' s';
+  chime(true);
+}
+function finish(){
+  phase='end';
+  const f=x=>x==null?'not measured':(x*DEG>=0?'+':'')+(x*DEG).toFixed(1)+'°';
+  E('finT').innerHTML=`<tr><td>Atrium (flat)</td><td>${f(holoLog.atrium)}</td></tr>
+    <tr><td>Archive (hyperbolic)</td><td>${f(holoLog.archive)}</td></tr>
+    <tr><td>Hollow (spherical)</td><td>${f(holoLog.hollow)}</td></tr>`;
+  E('fin').classList.remove('hidden');
+  if(document.pointerLockElement)document.exitPointerLock();
+}
+
+/* ── HUD helpers & sound ──────────────────────────────────────────────── */
+function banner(time,t,s){E('bT').textContent=t;E('bS').textContent=s||'';const b=E('banner');
+  b.classList.add('show');clearTimeout(banner._t);banner._t=setTimeout(()=>b.classList.remove('show'),2800);}
+function showLog(who,txt){logOpen=true;E('lWho').textContent=who;E('lTxt').innerHTML=txt;E('log').classList.add('show');}
+function hideLog(){logOpen=false;E('log').classList.remove('show');}
+let AC=null,droneNodes=null;
+function tone(f0,f1,dur,gain,type){try{
+  AC=AC||new (window.AudioContext||window.webkitAudioContext)();
+  const t=AC.currentTime,o=AC.createOscillator(),g=AC.createGain();o.type=type||'triangle';
+  o.frequency.setValueAtTime(f0,t);o.frequency.exponentialRampToValueAtTime(f1,t+dur);
+  g.gain.setValueAtTime(.0001,t);g.gain.exponentialRampToValueAtTime(gain,t+.015);g.gain.exponentialRampToValueAtTime(.0001,t+dur);
+  o.connect(g);g.connect(AC.destination);o.start(t);o.stop(t+dur+.05);}catch(e){}}
+function chime(big){tone(523,523,.6,.08,'sine');setTimeout(()=>tone(784,784,.8,.07,'sine'),110);
+  if(big)setTimeout(()=>tone(1046,1046,1.1,.06,'sine'),240);}
+function drone(w){try{
+  if(!AC)return;
+  if(droneNodes){droneNodes.forEach(n=>{try{n.stop();}catch(e){}});droneNodes=null;}
+  const f={atrium:110,archive:73.4,hollow:98}[w],g=AC.createGain();g.gain.value=.018;g.connect(AC.destination);
+  droneNodes=[f,f*1.498,f*2.003].map(fr=>{const o=AC.createOscillator();o.type='sine';o.frequency.value=fr;o.connect(g);o.start();return o;});
+}catch(e){}}
+
+/* ── loop & input ─────────────────────────────────────────────────────── */
+let last=performance.now();
+function frame(now){const dt=Math.min(.05,(now-last)/1000);last=now;update(dt,now);render(now);requestAnimationFrame(frame);}
+function resize(){
+  DPR=Math.min(window.devicePixelRatio||1,1.3);W=window.innerWidth;H=window.innerHeight;
+  cv.width=Math.ceil(W*DPR);cv.height=Math.ceil(H*DPR);cv.style.width=W+'px';cv.style.height=H+'px';
+  ctx.setTransform(DPR,0,0,DPR,0,0);CX=W/2;CY=H/2;S=(W*.5)/Math.tan(FOV*.5);
+  bakeOverlay();mapAge=1e9;mapCv=null;
+}
+addEventListener('resize',resize);
+let locked=false;
+function lockNow(){try{const r=cv.requestPointerLock&&cv.requestPointerLock();if(r&&r.catch)r.catch(()=>{});}catch(e){}}
+document.addEventListener('pointerlockchange',()=>{locked=document.pointerLockElement===cv;
+  E('hint').classList.toggle('hidden',locked||phase!=='play');});
+document.addEventListener('mousemove',e=>{if(!locked||logOpen||phase!=='play')return;
+  turnPlayer(e.movementX*.0022);pitch=clamp(pitch-e.movementY*.0018,-.5,.5);});
+let drag=false,lx=0,ly=0;
+cv.addEventListener('mousedown',e=>{if(logOpen){hideLog();return;}
+  if(!locked){lockNow();drag=true;lx=e.clientX;ly=e.clientY;}});
+addEventListener('mouseup',()=>{drag=false;});
+addEventListener('mousemove',e=>{if(locked||!drag||logOpen||phase!=='play')return;
+  turnPlayer((e.clientX-lx)*.004);pitch=clamp(pitch-(e.clientY-ly)*.003,-.5,.5);lx=e.clientX;ly=e.clientY;});
+E('intro').addEventListener('mousedown',start);
+E('fin').addEventListener('mousedown',()=>{});
+addEventListener('keydown',e=>{
+  const k=e.key.toLowerCase();
+  if(phase==='intro'){start();return;}
+  if(logOpen){hideLog();e.preventDefault();return;}
+  if(phase==='end'){if(k==='r')restartAll();return;}
+  keys[k]=true;
+  if(k==='m'){mapSize=(mapSize+1)%3;}
+  if(k==='e')engage(performance.now());
+  if(k==='r'&&phase==='play')enterWorld(world);
+  if(k===' '&&phase==='play'){
+    marks.push({p:P.p.slice(),g:gyroVec(),travelled:0});
+    if(marks.filter(m=>!m.plinth).length>4)marks.splice(marks.findIndex(m=>!m.plinth),1);
+    tone(660,440,.3,.06);banner(performance.now(),'MARK DROPPED','walk a loop and stand on it again');
+  }
+  if([' ','arrowup','arrowdown','arrowleft','arrowright'].includes(k))e.preventDefault();
+});
+addEventListener('keyup',e=>{keys[e.key.toLowerCase()]=false;});
+addEventListener('blur',()=>{keys=Object.create(null);});
+function start(){
+  if(phase!=='intro')return;
+  E('intro').classList.add('hidden');
+  try{AC=new (window.AudioContext||window.webkitAudioContext)();}catch(e){}
+  enterWorld('atrium');
+  lockNow();
+}
+function restartAll(){E('fin').classList.add('hidden');holoLog.atrium=holoLog.archive=holoLog.hollow=null;enterWorld('atrium');}
+
+resize();buildAtrium();
+E('wName').textContent=WORLDS.atrium.name;E('wGeo').innerHTML=WORLDS.atrium.geo;
+requestAnimationFrame(frame);
+/* test hook: lets a headless harness drive the real code */
+window.__FC={get:()=>({world,phase,P,gyro,cells,AT,AR,HO,ST,curCell,marks,K,INR,CIRC,EDGE,AREA,Pp,holoLog}),
+  enterWorld,turnPlayer,tryStep,boost,reframe,dist,transport,headingOf,gyroVec,engage,update,REFL:()=>REFL,
+  setGyro:g=>{gyro=g;},placeAt,tan:(A,B)=>{tangent(A,B);return [_ux,_uy,_uz,_ud];},cornerRooms,buildGhost,checkLocks,setCur:c=>{curCell=c;},setPhase:p=>{phase=p;},hideLog,keys:()=>keys,ST_T,thE,tangent,geoPt};
+</script>
+</body>
+</html>
