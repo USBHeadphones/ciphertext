@@ -1,0 +1,509 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hotkey Autoclicker</title>
+<style>
+  :root {
+    --bg: #f4f5f7; --panel: #ffffff; --ink: #16181d; --muted: #646b78; --line: #dde0e6;
+    --accent: #3b5bfd; --accent-ink: #ffffff; --good: #138a4a; --hot: #e2453c; --pad: #eef1ff;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0f1115; --panel: #171a21; --ink: #e8eaf0; --muted: #8b93a3; --line: #2a2f3a;
+      --accent: #6d86ff; --accent-ink: #0f1115; --good: #3ccf7f; --hot: #ff6a5f; --pad: #1c2233;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 24px 16px 48px; }
+  h1 { font-size: 26px; margin: 0 0 4px; letter-spacing: -0.02em; }
+  h2 { font-size: 15px; margin: 0 0 12px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+  .sub { color: var(--muted); margin: 0 0 20px; }
+  .grid { display: grid; grid-template-columns: 380px 1fr; gap: 16px; align-items: start; }
+  @media (max-width: 860px) { .grid { grid-template-columns: 1fr; } }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px; margin-bottom: 16px; }
+  .row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 10px 0; }
+  .row label { color: var(--muted); }
+  input[type=number], select {
+    background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 8px;
+    padding: 6px 8px; font: inherit; width: 140px;
+  }
+  input[type=range] { width: 100%; accent-color: var(--accent); }
+  button {
+    font: inherit; cursor: pointer; border-radius: 8px; border: 1px solid var(--line);
+    background: var(--bg); color: var(--ink); padding: 7px 12px;
+  }
+  button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
+  button.key { min-width: 140px; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 13px; }
+  button.key.capturing { border-color: var(--accent); color: var(--accent); }
+  .btns { display: flex; gap: 8px; flex-wrap: wrap; }
+  .status {
+    display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px;
+  }
+  .pill { font-size: 12px; font-weight: 600; padding: 3px 10px; border-radius: 99px; border: 1px solid var(--line); color: var(--muted); }
+  .pill.on { color: var(--good); border-color: var(--good); }
+  .pill.turbo { color: var(--hot); border-color: var(--hot); }
+  .switch { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+  .switch input { width: 18px; height: 18px; accent-color: var(--hot); }
+  #pad {
+    height: 340px; border-radius: 12px; border: 2px dashed var(--line); background: var(--pad);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    user-select: none; text-align: center; cursor: crosshair;
+  }
+  #pad.flash { border-color: var(--accent); }
+  #padCount { font-size: 56px; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: -0.03em; }
+  .stats { display: flex; gap: 24px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .stats b { color: var(--ink); }
+  #bm {
+    display: inline-block; padding: 10px 16px; border-radius: 8px; background: var(--hot); color: #fff;
+    font-weight: 700; text-decoration: none; cursor: grab;
+  }
+  ol, ul { padding-left: 20px; margin: 8px 0; }
+  li { margin: 4px 0; }
+  code, kbd { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 13px; background: var(--bg); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; }
+  .note { color: var(--muted); font-size: 13px; }
+  .hint { font-size: 12px; color: var(--muted); margin-top: -4px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Hotkey Autoclicker</h1>
+  <p class="sub">Only clicks while a hotkey has it switched on (or held down). Turbo mode clicks as fast as your browser can dispatch events.</p>
+
+  <div class="grid">
+    <!-- Everything in the control column is excluded from auto-clicks -->
+    <div data-ac-ignore>
+      <div class="card">
+        <h2>Status</h2>
+        <div class="status">
+          <span class="pill" id="pillOn">IDLE</span>
+          <span class="pill" id="pillTurbo">NORMAL</span>
+          <span class="pill" id="pillLock">FOLLOW MOUSE</span>
+        </div>
+        <div class="btns">
+          <button class="primary" id="startBtn">Start in 3s</button>
+          <button id="stopBtn">Stop</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Speed</h2>
+        <div class="row"><label for="cps">Clicks / second</label><input type="number" id="cps" min="1" max="1000" step="1"></div>
+        <input type="range" id="cpsRange" min="1" max="1000" step="1">
+        <div class="row">
+          <label class="switch"><input type="checkbox" id="turbo"> Turbo mode</label>
+          <span class="note">ignores CPS, max speed</span>
+        </div>
+        <div class="row"><label for="button">Mouse button</label>
+          <select id="button"><option value="left">Left</option><option value="right">Right</option><option value="double">Double</option></select>
+        </div>
+        <div class="row"><label for="limit">Stop after N clicks</label><input type="number" id="limit" min="0" step="1"></div>
+        <div class="hint">0 = unlimited</div>
+      </div>
+
+      <div class="card">
+        <h2>Hotkeys</h2>
+        <div class="row"><label>Toggle on/off</label><button class="key" data-key="toggleKey"></button></div>
+        <div class="row"><label>Hold to click</label><button class="key" data-key="holdKey"></button></div>
+        <div class="row"><label>Toggle turbo</label><button class="key" data-key="turboKey"></button></div>
+        <div class="row"><label>Lock click point</label><button class="key" data-key="lockKey"></button></div>
+        <div class="row"><label>Panic stop</label><button class="key" data-key="panicKey"></button></div>
+        <p class="note">Click a box, then press the key or combo. <kbd>Backspace</kbd> clears it.</p>
+      </div>
+    </div>
+
+    <div>
+      <div class="card">
+        <h2>Test pad</h2>
+        <div id="pad">
+          <div id="padCount">0</div>
+          <div class="stats">
+            <span>live <b id="padCps">0</b> cps</span>
+            <span>peak <b id="padPeak">0</b> cps</span>
+          </div>
+          <p class="note">Hover here and press your toggle key</p>
+        </div>
+        <div class="btns" style="margin-top:10px" data-ac-ignore><button id="resetPad">Reset counter</button></div>
+      </div>
+
+      <div class="card" data-ac-ignore>
+        <h2>Use it on other tabs</h2>
+        <p>A web page can't reach into other tabs, so the clicker travels as a <b>bookmarklet</b>: the same engine and your current settings, packed into a bookmark.</p>
+        <p><a id="bm" href="#">⚡ Autoclicker</a></p>
+        <ol>
+          <li>Drag the red button onto your bookmarks bar (show it with <kbd>Ctrl/⌘</kbd>+<kbd>Shift</kbd>+<kbd>B</kbd>).</li>
+          <li>On any site, click the bookmark. A small status badge appears in the corner.</li>
+          <li>Use your hotkeys there. Click the bookmark again to remove it.</li>
+        </ol>
+        <div class="btns"><button id="copyBm">Copy bookmarklet code</button></div>
+        <p class="note" id="copyMsg"></p>
+        <p class="note">Change any setting here and re-drag the bookmark to update it.</p>
+      </div>
+
+      <div class="card" data-ac-ignore>
+        <h2>Limits worth knowing</h2>
+        <ul class="note">
+          <li>Browsers mark these clicks as synthetic (<code>isTrusted = false</code>). Most pages accept them, but some games and anti-bot checks ignore them. Only an OS-level tool (AutoHotkey, xdotool) gets past that.</li>
+          <li>Clicks stay inside the page. They can't reach the browser UI, other apps, or cross-origin iframes (ads, embedded players).</li>
+          <li>A few sites with strict security policies block bookmarklets.</li>
+          <li>Turbo works in short bursts and yields between them, so your keys and the panic stop keep working at full speed.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+/*
+ * Self-contained click engine. It is used directly on this page and is also
+ * serialised with Function.prototype.toString() into the bookmarklet, so it
+ * must not reference anything outside itself.
+ */
+function AutoClicker(cfg) {
+  var w = window, d = document;
+  if (w.__autoclicker) {
+    if (cfg.embedded) { w.__autoclicker.update(cfg); return w.__autoclicker; }
+    w.__autoclicker.destroy();
+    return;
+  }
+
+  var st = { on: false, holding: false, turbo: !!cfg.turbo, lock: null, x: innerWidth / 2, y: innerHeight / 2, total: 0, suspended: false };
+  var running = false, timer = 0, nextAt = 0, hudTimer = 0, samples = [];
+  var ch = new MessageChannel();
+  ch.port1.onmessage = tick;
+
+  function active() { return !st.suspended && (st.on || st.holding); }
+
+  function point() { return st.lock || { x: st.x, y: st.y }; }
+
+  /* Find the element under the point, descending into same-origin iframes. */
+  function resolve(p) {
+    var x = p.x, y = p.y, doc = d, el = null;
+    for (var k = 0; k < 6; k++) {
+      el = doc.elementFromPoint(x, y);
+      if (!el || el.tagName !== 'IFRAME') break;
+      try {
+        var cd = el.contentDocument;
+        if (!cd) break;
+        var r = el.getBoundingClientRect();
+        x -= r.left + el.clientLeft; y -= r.top + el.clientTop; doc = cd;
+      } catch (e) { break; }
+    }
+    if (!el || (el.closest && el.closest('[data-ac-ignore]'))) return null;
+    return { el: el, x: x, y: y, view: doc.defaultView || w };
+  }
+
+  function send(t, type, ctor, btn, buttons) {
+    var C = (ctor === 'p' && t.view.PointerEvent) ? t.view.PointerEvent : t.view.MouseEvent;
+    t.el.dispatchEvent(new C(type, {
+      bubbles: true, cancelable: true, composed: true, view: t.view,
+      clientX: t.x, clientY: t.y, screenX: t.x + (w.screenX || 0), screenY: t.y + (w.screenY || 0),
+      button: btn, buttons: buttons, detail: 1, pointerId: 1, pointerType: 'mouse', isPrimary: true
+    }));
+  }
+
+  function fire(t) {
+    var right = cfg.button === 'right', b = right ? 2 : 0, bs = right ? 2 : 1;
+    var reps = cfg.button === 'double' ? 2 : 1;
+    for (var i = 0; i < reps; i++) {
+      send(t, 'pointerdown', 'p', b, bs);
+      send(t, 'mousedown', 'm', b, bs);
+      send(t, 'pointerup', 'p', b, 0);
+      send(t, 'mouseup', 'm', b, 0);
+      send(t, right ? 'contextmenu' : 'click', 'm', b, 0);
+    }
+    if (reps === 2) send(t, 'dblclick', 'm', 0, 0);
+  }
+
+  function tick() {
+    if (!running) return;
+    var now = performance.now(), n = 0, t = resolve(point());
+    var room = cfg.limit > 0 ? cfg.limit - st.total : Infinity;
+    if (st.turbo) {
+      /* Click flat out for a ~12ms burst, then yield so input events still get through. */
+      var end = now + 12;
+      if (t) {
+        do {
+          for (var i = 0; i < 25 && n < room; i++) { fire(t); n++; }
+        } while (n < room && performance.now() < end);
+      }
+      st.total += n; record(now, n);
+      if (cfg.limit > 0 && st.total >= cfg.limit) return finish();
+      ch.port2.postMessage(0);
+    } else {
+      /* Fixed-rate schedule; fires several per tick when the timer can't keep up. */
+      var iv = 1000 / Math.max(1, cfg.cps);
+      while (nextAt <= now && n < 1000 && n < room) { if (t) fire(t); n++; nextAt += iv; }
+      if (nextAt <= now) nextAt = now + iv;
+      if (!t) n = 0;
+      st.total += n; record(now, n);
+      if (cfg.limit > 0 && st.total >= cfg.limit) return finish();
+      timer = setTimeout(tick, Math.max(0, nextAt - performance.now()));
+    }
+  }
+
+  function record(now, n) {
+    samples.push([now, n]);
+    while (samples.length && samples[0][0] < now - 1000) samples.shift();
+  }
+
+  function cps() {
+    var now = performance.now(), s = 0;
+    for (var i = 0; i < samples.length; i++) if (samples[i][0] >= now - 1000) s += samples[i][1];
+    return s;
+  }
+
+  function finish() { st.on = false; st.holding = false; sync(); }
+
+  function start() {
+    if (running) return;
+    running = true; st.total = 0; samples = []; nextAt = performance.now();
+    tick();
+  }
+
+  function stop() { running = false; clearTimeout(timer); samples = []; }
+
+  /* ---- hotkeys ---- */
+  function combo(e) {
+    if (/^(Shift|Control|Alt|Meta)/.test(e.code)) return e.code;
+    return (e.ctrlKey ? 'Ctrl+' : '') + (e.altKey ? 'Alt+' : '') + (e.shiftKey ? 'Shift+' : '') + (e.metaKey ? 'Meta+' : '') + e.code;
+  }
+  function codeOf(k) { return k ? k.split('+').pop() : ''; }
+  function editable(el) {
+    return el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName));
+  }
+
+  function onKeyDown(e) {
+    if (st.suspended) return;
+    var c = combo(e);
+    if (editable(e.target) && /^(Key|Digit|Space|Backspace|Enter)/.test(c)) return;
+    if (cfg.holdKey && e.code === codeOf(cfg.holdKey)) {
+      if (!st.holding) { st.holding = true; sync(); }
+    } else if (c === cfg.panicKey) {
+      st.on = false; st.holding = false; st.turbo = false; st.lock = null; sync();
+    } else if (e.repeat && (c === cfg.toggleKey || c === cfg.turboKey || c === cfg.lockKey)) {
+      /* swallow auto-repeat */
+    } else if (c === cfg.toggleKey) {
+      st.on = !st.on; sync();
+    } else if (c === cfg.turboKey) {
+      st.turbo = !st.turbo; sync();
+    } else if (c === cfg.lockKey) {
+      st.lock = st.lock ? null : { x: st.x, y: st.y }; sync();
+    } else return;
+    e.preventDefault(); e.stopPropagation();
+  }
+
+  function onKeyUp(e) {
+    if (cfg.holdKey && e.code === codeOf(cfg.holdKey) && st.holding) {
+      st.holding = false; sync();
+      e.preventDefault(); e.stopPropagation();
+    }
+  }
+
+  function onMove(e) { st.x = e.clientX; st.y = e.clientY; }
+  function onBlur() { if (st.holding) { st.holding = false; sync(); } }
+
+  /* ---- on-page badge + lock marker ---- */
+  var hud = null, mark = null;
+  if (cfg.hud) {
+    hud = d.createElement('div');
+    hud.setAttribute('data-ac-ignore', '');
+    hud.style.cssText = 'position:fixed;top:10px;right:10px;z-index:2147483647;pointer-events:none;' +
+      'font:600 12px/1.4 ui-monospace,Menlo,Consolas,monospace;padding:6px 10px;border-radius:8px;' +
+      'background:rgba(15,17,21,.88);color:#e8eaf0;box-shadow:0 2px 10px rgba(0,0,0,.3);white-space:pre';
+    d.documentElement.appendChild(hud);
+  }
+  mark = d.createElement('div');
+  mark.setAttribute('data-ac-ignore', '');
+  mark.style.cssText = 'position:fixed;z-index:2147483646;pointer-events:none;width:18px;height:18px;margin:-9px 0 0 -9px;' +
+    'border:2px solid #e2453c;border-radius:50%;box-shadow:0 0 0 2px rgba(255,255,255,.7);display:none';
+  d.documentElement.appendChild(mark);
+
+  function label(k) { return k ? k.replace(/Key([A-Z])/, '$1').replace(/Digit(\d)/, '$1') : '—'; }
+
+  function paint() {
+    var s = snapshot();
+    if (hud) {
+      hud.textContent = (s.active ? '● CLICKING' : '○ idle') + (s.turbo ? '  TURBO' : '') + (s.locked ? '  LOCKED' : '') +
+        (s.active ? '  ' + s.cps.toLocaleString() + ' cps' : '') +
+        '\n' + label(cfg.toggleKey) + ' toggle  ' + label(cfg.turboKey) + ' turbo  ' + label(cfg.panicKey) + ' stop';
+      hud.style.color = s.active ? (s.turbo ? '#ff6a5f' : '#3ccf7f') : '#e8eaf0';
+    }
+    if (cfg.onState) cfg.onState(s);
+  }
+
+  function sync() {
+    if (active()) start(); else stop();
+    mark.style.display = st.lock ? 'block' : 'none';
+    if (st.lock) { mark.style.left = st.lock.x + 'px'; mark.style.top = st.lock.y + 'px'; }
+    clearInterval(hudTimer);
+    if (running) hudTimer = setInterval(paint, 200);
+    paint();
+  }
+
+  function snapshot() {
+    return { active: running, on: st.on, holding: st.holding, turbo: st.turbo, locked: !!st.lock, cps: running ? cps() : 0, total: st.total };
+  }
+
+  w.addEventListener('keydown', onKeyDown, true);
+  w.addEventListener('keyup', onKeyUp, true);
+  w.addEventListener('pointermove', onMove, true);
+  w.addEventListener('blur', onBlur);
+
+  var api = w.__autoclicker = {
+    update: function (c) { for (var k in c) cfg[k] = c[k]; if ('turbo' in c) st.turbo = !!c.turbo; sync(); },
+    set: function (s) { for (var k in s) st[k] = s[k]; sync(); },
+    suspend: function (v) { st.suspended = v; if (v) { st.holding = false; } sync(); },
+    state: snapshot,
+    destroy: function () {
+      stop(); clearInterval(hudTimer);
+      w.removeEventListener('keydown', onKeyDown, true);
+      w.removeEventListener('keyup', onKeyUp, true);
+      w.removeEventListener('pointermove', onMove, true);
+      w.removeEventListener('blur', onBlur);
+      if (hud) hud.remove();
+      mark.remove();
+      delete w.__autoclicker;
+    }
+  };
+  sync();
+  return api;
+}
+
+/* ---------------- page controller ---------------- */
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var DEFAULTS = { cps: 20, turbo: false, button: 'left', limit: 0,
+    toggleKey: 'F6', holdKey: '', turboKey: 'F7', lockKey: 'F8', panicKey: 'Escape' };
+  var cfg = Object.assign({}, DEFAULTS);
+  try { Object.assign(cfg, JSON.parse(localStorage.getItem('autoclicker.cfg') || '{}')); } catch (e) {}
+
+  function save() { try { localStorage.setItem('autoclicker.cfg', JSON.stringify(cfg)); } catch (e) {} }
+
+  var ac = AutoClicker(Object.assign({}, cfg, { embedded: true, hud: false, onState: render }));
+
+  function render(s) {
+    $('pillOn').textContent = s.active ? (s.holding && !s.on ? 'HOLDING' : 'CLICKING') : 'IDLE';
+    $('pillOn').className = 'pill' + (s.active ? ' on' : '');
+    $('pillTurbo').textContent = s.turbo ? 'TURBO' : 'NORMAL';
+    $('pillTurbo').className = 'pill' + (s.turbo ? ' turbo' : '');
+    $('pillLock').textContent = s.locked ? 'LOCKED POINT' : 'FOLLOW MOUSE';
+    if ($('turbo').checked !== s.turbo) { $('turbo').checked = s.turbo; cfg.turbo = s.turbo; save(); buildBookmarklet(); }
+  }
+
+  function apply(patch) {
+    Object.assign(cfg, patch);
+    save();
+    ac.update(patch);
+    buildBookmarklet();
+  }
+
+  /* speed controls */
+  function setCps(v) {
+    v = Math.max(1, Math.min(1000, Math.round(+v || 1)));
+    $('cps').value = v; $('cpsRange').value = v;
+    apply({ cps: v });
+  }
+  $('cps').value = $('cpsRange').value = cfg.cps;
+  $('cps').addEventListener('change', function () { setCps(this.value); });
+  $('cpsRange').addEventListener('input', function () { setCps(this.value); });
+  $('turbo').checked = cfg.turbo;
+  $('turbo').addEventListener('change', function () { apply({ turbo: this.checked }); });
+  $('button').value = cfg.button;
+  $('button').addEventListener('change', function () { apply({ button: this.value }); });
+  $('limit').value = cfg.limit;
+  $('limit').addEventListener('change', function () { apply({ limit: Math.max(0, Math.floor(+this.value || 0)) }); this.value = cfg.limit; });
+
+  /* start / stop buttons */
+  var countdown = 0;
+  $('startBtn').addEventListener('click', function () {
+    clearInterval(countdown);
+    var n = 3, b = this;
+    b.textContent = 'Starting in ' + n + '…';
+    countdown = setInterval(function () {
+      if (--n > 0) { b.textContent = 'Starting in ' + n + '…'; return; }
+      clearInterval(countdown); b.textContent = 'Start in 3s';
+      ac.set({ on: true });
+    }, 1000);
+  });
+  $('stopBtn').addEventListener('click', function () {
+    clearInterval(countdown); $('startBtn').textContent = 'Start in 3s';
+    ac.set({ on: false, holding: false });
+  });
+
+  /* hotkey capture */
+  function pretty(k) { return k ? k.replace(/Key([A-Z])/, '$1').replace(/Digit(\d)/, '$1') : 'none'; }
+  var keyBtns = document.querySelectorAll('button.key');
+  keyBtns.forEach(function (b) {
+    b.textContent = pretty(cfg[b.dataset.key]);
+    b.addEventListener('click', function () {
+      b.classList.add('capturing'); b.textContent = 'press a key…';
+      ac.suspend(true);
+      function grab(e) {
+        e.preventDefault(); e.stopPropagation();
+        if (/^(Shift|Control|Alt|Meta)/.test(e.code) && b.dataset.key !== 'holdKey') return; /* wait for the real key */
+        window.removeEventListener('keydown', grab, true);
+        var k;
+        if (e.code === 'Backspace') k = '';
+        else if (/^(Shift|Control|Alt|Meta)/.test(e.code) || b.dataset.key === 'holdKey') k = e.code;
+        else k = (e.ctrlKey ? 'Ctrl+' : '') + (e.altKey ? 'Alt+' : '') + (e.shiftKey ? 'Shift+' : '') + (e.metaKey ? 'Meta+' : '') + e.code;
+        b.classList.remove('capturing'); b.textContent = pretty(k);
+        var patch = {}; patch[b.dataset.key] = k;
+        apply(patch);
+        setTimeout(function () { ac.suspend(false); }, 0);
+      }
+      window.addEventListener('keydown', grab, true);
+    });
+  });
+
+  /* bookmarklet */
+  function buildBookmarklet() {
+    var c = { cps: cfg.cps, turbo: cfg.turbo, button: cfg.button, limit: cfg.limit, hud: true,
+      toggleKey: cfg.toggleKey, holdKey: cfg.holdKey, turboKey: cfg.turboKey, lockKey: cfg.lockKey, panicKey: cfg.panicKey };
+    var code = '(' + AutoClicker.toString() + ')(' + JSON.stringify(c) + ');void 0';
+    $('bm').href = 'javascript:' + encodeURIComponent(code);
+    return 'javascript:' + code;
+  }
+  buildBookmarklet();
+  $('bm').addEventListener('click', function (e) {
+    e.preventDefault();
+    $('copyMsg').textContent = 'Drag it to your bookmarks bar. Clicking it here does nothing.';
+  });
+  $('copyBm').addEventListener('click', function () {
+    var text = buildBookmarklet();
+    var done = function () { $('copyMsg').textContent = 'Copied. Make a new bookmark and paste this as its URL.'; };
+    if (navigator.clipboard) navigator.clipboard.writeText(text).then(done, fallback); else fallback();
+    function fallback() {
+      var ta = document.createElement('textarea'); ta.value = text; document.body.appendChild(ta);
+      ta.select(); try { document.execCommand('copy'); done(); } catch (e) {} ta.remove();
+    }
+  });
+
+  /* test pad: counts the clicks it actually receives */
+  var count = 0, peak = 0, fresh = 0, hits = [];
+  var pad = $('pad');
+  function hit(e) { e.preventDefault(); count++; fresh++; }
+  pad.addEventListener('click', hit);
+  pad.addEventListener('contextmenu', hit);
+  $('resetPad').addEventListener('click', function () { count = 0; peak = 0; fresh = 0; hits = []; });
+  (function loop() {
+    var now = performance.now(), live = 0;
+    hits.push([now, fresh]); fresh = 0;
+    while (hits.length && hits[0][0] < now - 1000) hits.shift();
+    for (var i = 0; i < hits.length; i++) live += hits[i][1];
+    if (live > peak) peak = live;
+    $('padCount').textContent = count.toLocaleString();
+    $('padCps').textContent = live.toLocaleString();
+    $('padPeak').textContent = peak.toLocaleString();
+    pad.classList.toggle('flash', live > 0);
+    requestAnimationFrame(loop);
+  })();
+})();
+</script>
+</body>
+</html>
