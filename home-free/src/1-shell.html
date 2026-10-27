@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Home Free</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,500&family=Courier+Prime&family=Kalam:wght@400;700&family=Patrick+Hand&display=swap">
+<style>
+/* Layout: full-bleed WebGL; the interface is a few lines of type in the dark, like a film's subtitles and nothing else. */
+:root{
+  --void:#040405; --snow:#e4e6ea; --frost:#9aa3b0; --dim:#4c525c; --amber:#d9902f; --red:#b8402e;
+  --display:"Fraunces","Iowan Old Style",Georgia,serif;
+  --mono:"Courier Prime","Courier New",Courier,monospace;
+  --hand:"Kalam","Segoe Print","Bradley Hand",cursive;
+  color-scheme:dark;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden;background:var(--void);color:var(--snow)}
+body{font-family:var(--display);-webkit-font-smoothing:antialiased;user-select:none;-webkit-user-select:none}
+#stage canvas{position:fixed;inset:0;width:100%;height:100%;display:block;outline:none}
+.layer{position:fixed;inset:0;pointer-events:none}
+#hidev{opacity:0;transition:opacity .4s}
+#hidev.on{opacity:1}
+#hidev.ward{background:radial-gradient(ellipse 62% 50% at 50% 50%,transparent 38%,rgba(0,0,0,.94) 100%),repeating-linear-gradient(180deg,rgba(5,4,3,.97) 0 30px,rgba(5,4,3,.15) 30px 37px,rgba(5,4,3,.97) 37px 40px)}
+#hidev.bed{background:linear-gradient(180deg,rgba(3,3,3,.98) 0 34%,rgba(3,3,3,.6) 38%,transparent 46%),radial-gradient(ellipse 80% 40% at 50% 70%,transparent 50%,rgba(0,0,0,.9) 100%)}
+#hud{opacity:0;transition:opacity 1s;z-index:4}
+#hidev{z-index:3}
+#hud.on{opacity:1}
+#cross{position:fixed;left:50%;top:50%;width:3px;height:3px;margin:-1.5px 0 0 -1.5px;border-radius:50%;background:rgba(228,230,234,.35);transition:all .18s}
+#cross.hot{width:16px;height:16px;margin:-8px 0 0 -8px;background:transparent;border:1px solid rgba(228,230,234,.5)}
+#cross svg{position:absolute;inset:-7px;width:30px;height:30px;opacity:0;transform:rotate(-90deg)}
+#cross.hold svg{opacity:1}
+#prompt{position:fixed;left:50%;top:calc(50% + 24px);transform:translateX(-50%);font:300 15px/1 var(--display);letter-spacing:.02em;color:var(--snow);opacity:0;transition:opacity .2s;text-shadow:0 0 8px #000,0 0 2px #000;white-space:nowrap}
+#prompt b{font:12px/1 var(--mono);border:1px solid rgba(228,230,234,.45);padding:2px 6px 1px;margin-right:9px;border-radius:2px;font-weight:400}
+#prompt.on{opacity:1}
+#intent{position:fixed;top:calc(24px + env(safe-area-inset-top,0px));left:max(28px,env(safe-area-inset-left,0px));max-width:380px;font:300 italic 16px/1.4 var(--display);color:var(--frost);text-shadow:0 0 10px #000;opacity:0;transition:opacity 1.6s}
+#intent.on{opacity:.9}
+#walkie{position:fixed;left:max(28px,env(safe-area-inset-left,0px));bottom:calc(26px + env(safe-area-inset-bottom,0px));display:flex;align-items:center;gap:10px;font:11px/1 var(--mono);letter-spacing:.18em;color:var(--dim);opacity:0;transition:opacity 1s}
+#walkie.on{opacity:1}
+#walkie i{width:7px;height:7px;border-radius:50%;background:#3a1410;box-shadow:none;transition:background .08s,box-shadow .08s}
+#walkie i.hot{background:#ff4a2a;box-shadow:0 0 10px #ff4a2a}
+.meter{position:fixed;left:50%;transform:translateX(-50%);width:150px;height:2px;background:rgba(228,230,234,.14);opacity:0;transition:opacity .4s;overflow:hidden}
+.meter.on{opacity:1}
+.meter i{position:absolute;left:0;top:0;bottom:0;width:100%;background:var(--snow)}
+#stam{bottom:calc(60px + env(safe-area-inset-bottom,0px))}
+#breath{bottom:calc(68px + env(safe-area-inset-bottom,0px))}
+#breath i{background:var(--frost)}
+#breath.low i{background:var(--red)}
+#subs{z-index:5;position:fixed;left:50%;bottom:calc(96px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);width:min(760px,88vw);text-align:center;display:flex;flex-direction:column;gap:6px;align-items:center}
+.sub{font:300 21px/1.4 var(--display);color:var(--snow);text-shadow:0 0 12px #000,0 0 3px #000;opacity:0;transition:opacity .6s;text-wrap:balance}
+.sub.on{opacity:1}
+.sub.me{font-style:italic}
+.sub.phone{font:16px/1.5 var(--mono);color:#cfd6c8}
+.sub.phone::before{content:"\25B8  ";color:var(--dim)}
+.sub.sfx{font:12px/1.3 var(--mono);letter-spacing:.2em;text-transform:uppercase;color:var(--frost)}
+.sub.it{font:500 23px/1.2 var(--display);letter-spacing:.14em;color:#c9cfd8}
+#toast{position:fixed;left:50%;top:21%;transform:translateX(-50%);font:12px/1 var(--mono);letter-spacing:.3em;text-transform:uppercase;color:var(--frost);opacity:0;transition:opacity 1.4s;white-space:nowrap}
+#toast.on{opacity:.85}
+
+.screen{position:fixed;inset:0;display:flex;align-items:safe center;justify-content:center;overflow-y:auto;padding-block:32px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));opacity:0;pointer-events:none;transition:opacity 1.4s}
+.screen.on{opacity:1;pointer-events:auto}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+.btn{font:13px/1 var(--mono);letter-spacing:.32em;text-transform:uppercase;padding:15px 24px 14px 28px;border:1px solid rgba(228,230,234,.3);color:var(--snow);transition:border-color .4s,background .4s}
+.btn:hover,.btn:focus-visible{border-color:var(--snow);background:rgba(228,230,234,.05);outline:none}
+.btn:disabled{opacity:.3;cursor:wait}
+#title{background:radial-gradient(ellipse 80% 70% at 50% 40%,rgba(4,4,5,.2),rgba(4,4,5,.9) 100%)}
+.tw{display:flex;flex-direction:column;align-items:center;text-align:center;gap:24px;max-width:620px}
+.eyebrow{font:12px/1 var(--mono);letter-spacing:.42em;text-transform:uppercase;color:var(--frost)}
+h1{font:300 clamp(60px,12vw,138px)/.9 var(--display);letter-spacing:-.02em;color:var(--snow);text-shadow:0 0 60px rgba(0,0,0,.9)}
+h1 em{font-style:italic;font-weight:300;color:var(--frost)}
+.warn{font:300 14px/1.6 var(--display);font-style:italic;color:var(--frost);max-width:440px}
+.keys{display:grid;grid-template-columns:repeat(4,auto);gap:9px 22px;font:11px/1.4 var(--mono);letter-spacing:.1em;color:var(--dim)}
+.keys b{color:var(--frost);font-weight:400;margin-right:7px}
+@media (max-width:640px){.keys{grid-template-columns:repeat(2,auto)}}
+#loadbar{width:min(260px,70vw);height:1px;background:rgba(228,230,234,.14);overflow:hidden}#loadbar i{display:block;height:100%;width:0;background:var(--snow);transition:width .3s}
+#loadmsg{font:11px/1 var(--mono);letter-spacing:.28em;text-transform:uppercase;color:var(--dim);min-height:11px}
+#intro{background:#000;cursor:none}
+#introText{max-width:580px;font:300 clamp(18px,2.2vw,23px)/1.65 var(--display);color:var(--snow);display:flex;flex-direction:column;gap:20px}
+#introText p{opacity:0;transition:opacity 2.2s;text-wrap:pretty}
+#introText p.on{opacity:1}
+#skip{position:fixed;right:max(24px,env(safe-area-inset-right,0px));bottom:calc(22px + env(safe-area-inset-bottom,0px));font:11px/1 var(--mono);letter-spacing:.24em;text-transform:uppercase;color:var(--dim)}
+#pause{background:rgba(3,3,4,.84);backdrop-filter:blur(3px)}
+.pw{display:flex;flex-direction:column;gap:26px;align-items:center;width:min(420px,100%)}
+.pw h2{font:300 40px/1 var(--display)}
+.set{display:grid;grid-template-columns:1fr 1.3fr;gap:18px 20px;width:100%;align-items:center;font:11px/1 var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--frost)}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:2px;background:rgba(228,230,234,.25);outline:none}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;height:12px;border-radius:50%;background:var(--snow);cursor:pointer}
+input[type=range]::-moz-range-thumb{width:12px;height:12px;border-radius:50%;background:var(--snow);border:0}
+input[type=range]:focus-visible{outline:1px solid var(--frost);outline-offset:6px}
+.tog{justify-self:start;font:11px/1 var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--snow);border-bottom:1px solid var(--frost);padding-bottom:3px}
+.hint{font:300 italic 14px/1.5 var(--display);color:var(--dim);text-align:center}
+#dead{background:#000}
+#dead p{font:300 italic 20px/1.5 var(--display);color:var(--frost);max-width:460px;text-align:center}
+#end{background:#000}
+.ew{max-width:580px;display:flex;flex-direction:column;gap:26px;align-items:center;text-align:center}
+#epi{display:flex;flex-direction:column;gap:22px}
+#epi p{font:300 clamp(18px,2.1vw,22px)/1.65 var(--display);color:var(--snow);opacity:0;transition:opacity 2.6s;text-wrap:pretty}
+#epi p.on{opacity:1}
+#fin{display:flex;flex-direction:column;gap:22px;align-items:center;opacity:0;transition:opacity 3s}
+#fin.on{opacity:1}
+#fin h2{font:300 clamp(54px,10vw,112px)/.9 var(--display);letter-spacing:-.02em}
+.stats{display:flex;gap:32px;font:10px/1.7 var(--mono);letter-spacing:.2em;text-transform:uppercase;color:var(--frost)}
+.stats b{display:block;font:300 24px/1 var(--display);color:var(--snow);letter-spacing:0;font-variant-numeric:tabular-nums}
+#doc{background:rgba(2,2,3,.82);cursor:default}
+#docw{display:flex;flex-direction:column;align-items:center;gap:16px;width:min(720px,100%)}
+#docw canvas,#docw img{max-width:100%;max-height:72vh;height:auto;box-shadow:0 30px 80px rgba(0,0,0,.9);transform:rotate(-.5deg) translateY(14px);transition:transform .6s cubic-bezier(.2,.8,.2,1)}
+#doc.on #docw canvas,#doc.on #docw img{transform:rotate(-.5deg) translateY(0)}
+#doccap{font:300 italic 15px/1.5 var(--display);color:var(--frost);text-align:center;max-width:520px}
+#docclose{font:11px/1 var(--mono);letter-spacing:.24em;text-transform:uppercase;color:var(--dim)}
+@media (prefers-reduced-motion:reduce){.screen,.sub,#introText p,#epi p{transition-duration:.01s}}
+</style>
+</head>
+<body>
+<div id="stage"></div>
+<div class="layer" id="hidev"></div>
+
+<div class="layer" id="hud">
+  <div id="cross"><svg viewBox="0 0 30 30"><circle id="holdring" cx="15" cy="15" r="13" stroke="#e4e6ea" stroke-width="1.4" fill="none" stroke-dasharray="81.7" stroke-dashoffset="81.7"/></svg></div>
+  <div id="prompt"></div>
+  <div id="intent"></div>
+  <div id="walkie"><i></i>Ch 14</div>
+  <div class="meter" id="stam"><i></i></div>
+  <div class="meter" id="breath"><i></i></div>
+  <div id="subs"></div>
+  <div id="toast"></div>
+</div>
+
+<div class="screen on" id="title">
+  <div class="tw">
+    <p class="eyebrow">Coldharbour Lane · 13 January</p>
+    <h1>Home <em>Free</em></h1>
+    <button class="btn" id="begin" disabled>Go inside</button>
+    <div id="loadbar"><i></i></div>
+    <p id="loadmsg">Building the house</p>
+    <p class="warn">Play with headphones, in the dark. Keyboard and mouse.<br>Contains sudden loud sounds and themes of child loss.</p>
+    <div class="keys"><span><b>WASD</b>Move</span><span><b>Mouse</b>Look</span><span><b>Shift</b>Run</span><span><b>C</b>Crouch</span><span><b>E</b>Use · Hide</span><span><b>Space</b>Hold breath</span><span><b>F</b>Torch</span><span><b>Esc</b>Pause</span></div>
+  </div>
+</div>
+
+<div class="screen" id="intro"><div id="introText"></div><div id="skip">Space to skip</div></div>
+<div class="screen" id="doc"><div id="docw"><div id="docslot"></div><p id="doccap"></p><p id="docclose">E · put it down</p></div></div>
+
+<div class="screen" id="pause">
+  <div class="pw">
+    <h2>Paused</h2>
+    <div class="set">
+      <label for="sSens">Look speed</label><input type="range" id="sSens" min="0.3" max="2.5" step="0.05">
+      <label for="sBright">Brightness</label><input type="range" id="sBright" min="0" max="1" step="0.02">
+      <label for="sVol">Volume</label><input type="range" id="sVol" min="0" max="1" step="0.02">
+      <span>Spoken counting</span><button class="tog" id="sVoice"></button>
+    </div>
+    <button class="btn" id="resume">Back</button>
+    <p class="hint">Turn brightness up only until you can make out the hallway with the torch off.</p>
+  </div>
+</div>
+
+<div class="screen" id="dead"><div class="tw"><p id="deadline"></p><button class="btn" id="retry">Again</button></div></div>
+
+<div class="screen" id="end">
+  <div class="ew">
+    <div id="epi"></div>
+    <div id="fin">
+      <h2>Home Free</h2>
+      <div class="stats"><div>Time<b id="stTime">0:00</b></div><div>Found<b id="stFound">0</b></div></div>
+      <button class="btn" id="again">Play again</button>
+    </div>
+  </div>
+</div>
